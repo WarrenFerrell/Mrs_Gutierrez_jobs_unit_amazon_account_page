@@ -1,7 +1,27 @@
 "use strict";
 
 (function () {
-  const TORNADO_SLIDER_MAX = 180;
+  const TORNADO_CONFIG = {
+    sliderMax: 180,
+    defaultIntensity: 10,
+    chaosSeedMin: 0.18,
+    chaosSeedMax: 0.82,
+    logisticRXMin: 3.4,
+    logisticRXMax: 3.7,
+    logisticRYMin: 3.5,
+    logisticRYMax: 3.8,
+    speedMin: 0.65,
+    speedMax: 1.05,
+    horizontalBase: 0.015,
+    horizontalScale: 0.45,
+    verticalBase: 20,
+    verticalScale: 180,
+    tiltBase: 2,
+    tiltScale: 10,
+    stepBase: 0.00025,
+    stepScale: 0.0032,
+    normalizedExponent: 2.4,
+  };
   const MOOD_RANGES = [
     { max: 20, label: "Breezy" },
     { max: 40, label: "Gusty" },
@@ -9,7 +29,7 @@
     { max: 90, label: "Wild" },
     { max: 120, label: "Rowdy" },
     { max: 150, label: "Bonkers" },
-    { max: TORNADO_SLIDER_MAX, label: "Mayhem" },
+    { max: TORNADO_CONFIG.sliderMax, label: "Mayhem" },
   ];
   const buttonHandlers = window.CrazyPanelButtonHandlers = window.CrazyPanelButtonHandlers || {};
 
@@ -119,11 +139,11 @@
         baseTransform: card.style.transform || "",
         direction,
         progress: 0,
-        chaosX: runtime.randomBetween(0.12, 0.88),
-        chaosY: runtime.randomBetween(0.12, 0.88),
-        rX: runtime.randomBetween(3.72, 3.96),
-        rY: runtime.randomBetween(3.80, 3.99),
-        speed: runtime.randomBetween(0.85, 1.35),
+        chaosX: runtime.randomBetween(TORNADO_CONFIG.chaosSeedMin, TORNADO_CONFIG.chaosSeedMax),
+        chaosY: runtime.randomBetween(TORNADO_CONFIG.chaosSeedMin, TORNADO_CONFIG.chaosSeedMax),
+        rX: runtime.randomBetween(TORNADO_CONFIG.logisticRXMin, TORNADO_CONFIG.logisticRXMax),
+        rY: runtime.randomBetween(TORNADO_CONFIG.logisticRYMin, TORNADO_CONFIG.logisticRYMax),
+        speed: runtime.randomBetween(TORNADO_CONFIG.speedMin, TORNADO_CONFIG.speedMax),
       };
     });
 
@@ -157,10 +177,11 @@
 
     const intensity = getNormalizedIntensity(runtime.stateRef);
     const viewportWidth = window.innerWidth || document.documentElement.clientWidth || 1200;
-    const horizontalTravel = viewportWidth * (0.2 + 0.65 * intensity);
-    const verticalRange = 120 + intensity * 260;
-    const chaosTilt = 4 + intensity * 16;
-    const baseStep = 0.001 + intensity * 0.004;
+    const horizontalTravel =
+      viewportWidth * (TORNADO_CONFIG.horizontalBase + TORNADO_CONFIG.horizontalScale * intensity);
+    const verticalRange = TORNADO_CONFIG.verticalBase + intensity * TORNADO_CONFIG.verticalScale;
+    const chaosTilt = TORNADO_CONFIG.tiltBase + intensity * TORNADO_CONFIG.tiltScale;
+    const baseStep = TORNADO_CONFIG.stepBase + intensity * TORNADO_CONFIG.stepScale;
 
     runtime.cards.forEach((cardData) => {
       cardData.chaosX = logisticStep(cardData.chaosX, cardData.rX);
@@ -200,9 +221,9 @@
   function clampTornadoValue(value) {
     const numeric = Number(value);
     if (!Number.isFinite(numeric)) {
-      return 45;
+      return TORNADO_CONFIG.defaultIntensity;
     }
-    return Math.min(TORNADO_SLIDER_MAX, Math.max(0, numeric));
+    return Math.min(TORNADO_CONFIG.sliderMax, Math.max(0, numeric));
   }
 
   function updateTornadoLabel(labelEl, value, sliderEl) {
@@ -248,10 +269,10 @@
   function getNormalizedIntensity(state) {
     const raw =
       !state || typeof state.tornadoIntensity !== "number"
-        ? 45
+        ? TORNADO_CONFIG.defaultIntensity
         : clampTornadoValue(state.tornadoIntensity);
-    const normalized = raw / TORNADO_SLIDER_MAX;
-    return Math.pow(normalized, 1.25);
+    const normalized = raw / TORNADO_CONFIG.sliderMax;
+    return Math.pow(normalized, TORNADO_CONFIG.normalizedExponent);
   }
 
   function randomBetween(min, max) {
