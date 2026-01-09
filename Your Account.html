@@ -4,15 +4,298 @@
 <!-- sp:end-feature:head-start -->
 <!-- sp:feature:csm:head-open-part1 -->
 
-<script type="text/javascript">var ue_t0=ue_t0||+new Date();</script>
+<script type="text/javascript">
+(function detectLocalCrazyMode() {
+  if (typeof window.__CRAZY_DISABLE_AUI__ === "boolean") {
+    return;
+  }
+  var protocol = window.location.protocol;
+  var host = window.location.hostname;
+  window.__CRAZY_DISABLE_AUI__ =
+    protocol === "file:" || host === "localhost" || host === "127.0.0.1";
+})();
+if (!window.__CRAZY_DISABLE_AUI__) {
+  var ue_t0 = ue_t0 || +new Date();
+}
+</script>
 <!-- sp:end-feature:csm:head-open-part1 -->
 <!-- sp:feature:cs-optimization -->
 <meta http-equiv="x-dns-prefetch-control" content="on">
 <link rel="preconnect" href="https://images-na.ssl-images-amazon.com/" crossorigin="">
 <link rel="preconnect" href="https://m.media-amazon.com/" crossorigin="">
 <!-- sp:end-feature:cs-optimization -->
+<script>
+(function setupLocalAuiStubs() {
+  const isLocalMode = !!window.__CRAZY_DISABLE_AUI__;
+  window.__CRAZY_DISABLE_AUI__ = isLocalMode;
+  if (!isLocalMode) {
+    return;
+  }
+
+  const noop = function () {};
+  const stubbedWhen = function () {
+    return { register: noop, execute: noop };
+  };
+  const stubbedLoader = { js: noop, css: noop };
+
+  const blockedHosts = new Set(["empty.gif", "unagi", "suggestions"]);
+  const blankPayload = "{}";
+  const blankDataUri = "data:application/json;charset=utf-8,%7B%7D";
+
+  const shouldSilenceUrl = function (value) {
+    if (!value) {
+      return false;
+    }
+    try {
+      const parsed = new URL(value, window.location.href);
+      if (parsed.protocol === "file:") {
+        return true;
+      }
+      return blockedHosts.has(parsed.hostname);
+    } catch (error) {
+      return false;
+    }
+  };
+
+  const ensureRxDefaults = function (target) {
+    const safe = target || {};
+    safe.rid = safe.rid || "local-rid";
+    safe.sid = safe.sid || "local-sid";
+    safe.fnpb = safe.fnpb || [];
+    safe.fnpv = safe.fnpv || 0;
+    safe.ep = typeof safe.ep === "function" ? safe.ep : noop;
+    safe.ep4 =
+      typeof safe.ep4 === "function"
+        ? safe.ep4
+        : function () {
+            return [];
+          };
+    safe.ex64 = typeof safe.ex64 === "function" ? safe.ex64 : noop;
+    safe.e64 = typeof safe.e64 === "function" ? safe.e64 : noop;
+    safe.r = typeof safe.r === "function" ? safe.r : noop;
+    safe.e = typeof safe.e === "function" ? safe.e : noop;
+    return safe;
+  };
+
+  const rx = ensureRxDefaults(window.rx);
+  Object.defineProperty(window, "rx", {
+    configurable: true,
+    enumerable: true,
+    get() {
+      return rx;
+    },
+    set(nextValue) {
+      if (nextValue && typeof nextValue === "object") {
+        ensureRxDefaults(nextValue);
+        Object.assign(rx, nextValue);
+      }
+      return rx;
+    },
+  });
+
+  const ensureBcxpDefaults = function (target) {
+    const safe = target || {};
+    const defaultHandler = function () {
+      return {
+        e: noop,
+        w: noop,
+        i: noop,
+        l: noop,
+      };
+    };
+    safe.e = typeof safe.e === "function" ? safe.e : defaultHandler;
+    safe.w = typeof safe.w === "function" ? safe.w : noop;
+    safe.i = typeof safe.i === "function" ? safe.i : noop;
+    safe.l = typeof safe.l === "function" ? safe.l : noop;
+    return safe;
+  };
+
+  const bcxp = ensureBcxpDefaults(window._bcxp);
+  Object.defineProperty(window, "_bcxp", {
+    configurable: true,
+    enumerable: true,
+    get() {
+      return bcxp;
+    },
+    set(nextValue) {
+      if (nextValue && typeof nextValue === "object") {
+        ensureBcxpDefaults(nextValue);
+        Object.assign(bcxp, nextValue);
+      }
+      return bcxp;
+    },
+  });
+
+  const createStubFetchResponse = function () {
+    if (typeof Response === "function") {
+      return new Response(blankPayload, { status: 204, statusText: "Local stub" });
+    }
+    const stub = {
+      ok: true,
+      status: 204,
+      statusText: "Local stub",
+      text: function () {
+        return Promise.resolve(blankPayload);
+      },
+      json: function () {
+        return Promise.resolve({});
+      },
+      arrayBuffer: function () {
+        return Promise.resolve(new ArrayBuffer(0));
+      },
+      blob: function () {
+        return Promise.resolve(new Blob([]));
+      },
+    };
+    stub.clone = function () {
+      return createStubFetchResponse();
+    };
+    return stub;
+  };
+
+  if (typeof window.fetch === "function") {
+    const nativeFetch = window.fetch.bind(window);
+    window.fetch = function (resource, init) {
+      const url = typeof resource === "string" ? resource : resource && resource.url;
+      if (shouldSilenceUrl(url)) {
+        return Promise.resolve(createStubFetchResponse());
+      }
+      return nativeFetch(resource, init);
+    };
+  }
+
+  if (navigator && typeof navigator.sendBeacon === "function") {
+    const nativeSendBeacon = navigator.sendBeacon.bind(navigator);
+    navigator.sendBeacon = function (url) {
+      if (shouldSilenceUrl(url)) {
+        return false;
+      }
+      return nativeSendBeacon.apply(this, arguments);
+    };
+  }
+
+  if (typeof window.XMLHttpRequest === "function") {
+    const prototype = window.XMLHttpRequest.prototype;
+    const originalOpen = prototype.open;
+    prototype.open = function (method, url, async, user, password) {
+      this.__crazySilenced = shouldSilenceUrl(url);
+      const targetUrl = this.__crazySilenced ? blankDataUri : url;
+      if (this.__crazySilenced) {
+        try {
+          Object.defineProperty(this, "status", {
+            configurable: true,
+            get() {
+              return 200;
+            },
+          });
+          Object.defineProperty(this, "statusText", {
+            configurable: true,
+            get() {
+              return "OK";
+            },
+          });
+          Object.defineProperty(this, "response", {
+            configurable: true,
+            get() {
+              return blankPayload;
+            },
+          });
+          Object.defineProperty(this, "responseText", {
+            configurable: true,
+            get() {
+              return blankPayload;
+            },
+          });
+        } catch (error) {
+          // ignore descriptor issues
+        }
+      }
+      return originalOpen.call(this, method, targetUrl, async, user, password);
+    };
+  }
+
+  if (typeof Image === "function") {
+    const descriptor = Object.getOwnPropertyDescriptor(Image.prototype, "src");
+    if (descriptor && descriptor.set) {
+      Object.defineProperty(Image.prototype, "src", {
+        configurable: true,
+        get: descriptor.get,
+        set(value) {
+          if (shouldSilenceUrl(value)) {
+            return descriptor.set.call(this, blankDataUri);
+          }
+          return descriptor.set.call(this, value);
+        },
+      });
+    }
+  }
+
+  window.ue = window.ue || {};
+  window.ue.count = window.ue.count || noop;
+  window.ue.event = window.ue.event || noop;
+  window.ue.on = window.ue.on || noop;
+  window.ue.log = window.ue.log || noop;
+  window.ue.stub = window.ue.stub || noop;
+  window.ue.trigger = window.ue.trigger || noop;
+  window.ue.tag =
+    window.ue.tag ||
+    function () {
+      return [];
+    };
+  window.ue.exec = window.ue.exec || function (fn) {
+    if (typeof fn === "function") {
+      try {
+        return fn;
+      } catch (error) {
+        return noop;
+      }
+    }
+    return noop;
+  };
+  window.ue.uels = window.ue.uels || noop;
+  window.ueLogError = noop;
+  window.uex = noop;
+  window.uet = noop;
+  window.ues = noop;
+  window.ue_csm = window.ue_csm || {};
+  window.ue_csm.window = window.ue_csm.window || window;
+  window.ue_csm.document = window.ue_csm.document || document;
+  window.ue_csm.navigator = window.ue_csm.navigator || navigator;
+  window.ue_csm.ue = window.ue_csm.ue || window.ue;
+  window.csa =
+    window.csa ||
+    function () {
+      return function () {};
+    };
+  window.AmazonUIPageJS =
+    window.AmazonUIPageJS || {
+      when: stubbedWhen,
+      now: stubbedWhen,
+      register: noop,
+      execute: noop,
+      declare: noop,
+      log: noop,
+      trigger: noop,
+      load: stubbedLoader,
+    };
+  window.P = window.P || window.AmazonUIPageJS;
+
+  if (navigator.serviceWorker) {
+    const sw = navigator.serviceWorker;
+    ["register", "getRegistration", "getRegistrations"].forEach((method) => {
+      if (typeof sw[method] === "function") {
+        sw[method] = function () {
+          return Promise.reject(new Error("Service workers disabled in local mode"));
+        };
+      }
+    });
+  }
+
+})();
+</script>
 <!-- sp:feature:csm:head-open-part2 -->
 <script type="text/javascript">
+if (!window.__CRAZY_DISABLE_AUI__) {
 window.ue_ihb = (window.ue_ihb || window.ueinit || 0) + 1;
 if (window.ue_ihb === 1) {
 
@@ -84,6 +367,7 @@ for(c=0;c<f.length;c++)w(f[c],a);b=!1},250)):b=!1}},!0)};for(e=0;e<t.length;e++)
 var ue_hoe = +new Date();
 }
 window.ueinit = window.ue_ihb;
+}
 </script>
 
 <!-- 56xt4hif9pe1jnhpmfmmd -->
@@ -186,6 +470,7 @@ return b.mix_csa_internal("Content",a,{element:c})}catch(f){return P.logError(f,
 <!-- sp:end-feature:flow-closure-id -->
 <!-- sp:feature:csm:head-close -->
 <script type="text/javascript">
+if (!window.__CRAZY_DISABLE_AUI__) {
 window.ue_ihe = (window.ue_ihe || 0) + 1;
 if (window.ue_ihe === 1) {
 (function(k,l,g){function m(a){c||(c=b[a.type].id,"undefined"===typeof a.clientX?(e=a.pageX,f=a.pageY):(e=a.clientX,f=a.clientY),2!=c||h&&(h!=e||n!=f)?(r(),d.isl&&l.setTimeout(function(){p("at",d.id)},0)):(h=e,n=f,c=0))}function r(){for(var a in b)b.hasOwnProperty(a)&&d.detach(a,m,b[a].parent)}function s(){for(var a in b)b.hasOwnProperty(a)&&d.attach(a,m,b[a].parent)}function t(){var a="";!q&&c&&(q=1,a+="&ui="+c);return a}var d=k.ue,p=k.uex,q=0,c=0,h,n,e,f,b={click:{id:1,parent:g},mousemove:{id:2,
@@ -209,6 +494,7 @@ ue.stub(ue,"trigger");
 
 if(window.ue&&uet) { uet('bb'); }
 
+}
 }
 </script>
 <script>window.ue && ue.count && ue.count('CSMLibrarySize', 2728)</script>
@@ -3806,6 +4092,9 @@ setTimeout(g,1E3,h):e.addEventListener&&e.addEventListener("DOMContentLoaded",fu
 
 
 <script type="text/javascript">
+if (window.__CRAZY_DISABLE_AUI__) {
+  window.ue_ibe = window.ue_ibe || 0;
+} else {
 window.ue_ibe = (window.ue_ibe || 0) + 1;
 if (window.ue_ibe === 1) {
 (function(e,c){function h(b,a){f.push([b,a])}function g(b,a){if(b){var c=e.head||e.getElementsByTagName("head")[0]||e.documentElement,d=e.createElement("script");d.async="async";d.src=b;d.setAttribute("crossorigin","anonymous");a&&a.onerror&&(d.onerror=a.onerror);a&&a.onload&&(d.onload=a.onload);c.insertBefore(d,c.firstChild)}}function k(){ue.uels=g;for(var b=0;b<f.length;b++){var a=f[b];g(a[0],a[1])}ue.deffered=1}var f=[];c.ue&&(ue.uels=h,c.ue.attach&&c.ue.attach("load",k))})(document,window);
@@ -4001,6 +4290,7 @@ rx.ex64("UlgBKSgnTEEtQ0BEUVBXQFYhQUpLQCBTRElQQCBISkFASSFRXFVAIEFAS1ZAIlJATEJNUVY
 rx.ex64("UlgBKSghaERRTTZXQEhKU0BgU0BLUWlMVlFAS0BXLEhKUFZASEpTQCBGSUxGTiNWRldKSUkmUURCJ1ddIEZKUEtRIkZJTEBLUX0iRklMQEtRfCJWRldKSUl8IUBdQEY1REFBYFNAS1FpTFZRQEtAVyQkuDMVKS1BSkZQSEBLUQUlJCe4MxUpJ1BABSUkJhUpJlBAXQUlJCEVKSFWVFdRFSglBSUkIBUpJlVKUhUoJQUlJCMVKSZER1YVKCUFJSQiMiErKSJVRFZWTFNAKykiRkRVUVBXQCQtNEEkLDRBJC8uJC4uJCkuJCguJCsuJCouJDU0JSQ0NCVkNwwliJGSr6ODoqGDpYOor6CRkq+jg6Khg6WDqa+hkZKvo4OioYOlg66vpo5kNkAlemxgXVVxUmVQYWBdVXFSXEY4MSN9IyQiPz43fTk+JDUiMTMkOT8+bMxxU2BcUzkjPHFSWVBicVNdVlxSMSRsYF1XcVJLUGJgXVdxUkFRXEEDJCI/PjcZPiQ1IjEzJDk/PmBxQnxkMT8lETsGpqUrOgo3Mxo7pSs6CjcyGjs5OgobKRZkMHMlc1lkxP5TeVb+U3lVdlhqeV1JWsl5VWhVUHhZU2p5XUlayXlWaFVReFlTSGpqU2l5XGpZWllaSch4WnlJZPl5UHlJW1hoeUtaVWhVUHhZWlZoVVF4WXRkMwslGDIPlTgSPCEzAhI1ohI8Az45EjMjMhIjMSMyD5ISOhIjMDMDEiAxPAM+ORIzH2QydiVPVFVoblVoY0RlRHBnb2RUVWhuVWhjRGVEcWduZFRVaG5VaGNEZURzZ2lkVlVoaURlZkRiRG9oZ1ZVaGlEZWZEYkRuaGZWVWhpRGVmRGJEaWhhSRcVKSRXFSgjBSUFMikhSUpEQQ==","load");
 rx.ex64("UlgBKScmUURCJ1ddJCS4MxUpLUFKRlBIQEtRBSUkJ7gzFSknUEAFJSQmFSkmUEBdBSVkIWolcFpua1ddCT48HiMrelvLV1NmcwAFYAZwcst7WldecwUne3JQamtXXjY6Lzgza1ddODQ0MDI+elppWllaa2tXXy8pMjZrSll7WUdae1l2WmQgGiUELhMfIi8OLRsvHh8iLw4tvw8uIz1dVwJHRkhHSlxbAk5MW0ZAQRUTsw4sHyMsRlxDDi0mLx0OLCIuIy1OWwNkI3clWENTdn9zc3NzQ0J+dwECHhsGUnN+czJxQmNzc25zUnNzcHNOUnBbckNCfnYTBh0QU3JScHNxc0NCfngRGhMAMR0WFzMGUnFjcnN2c0NTd1J2XhcVKSRXFSgkBSUFIykhSUpEQQ==","load");
 rx.ex64("UlgBKS4nV10jd0BCYF1VI0ZKSk5MQCNJQEtCUU0gQ0lKSlctRlZWd1BJQFYsUEtBQENMS0BBIFdQSUBWNVRQQFdcdkBJQEZRSldkSUkhUUBWUSUkJBUpIWhEUU0FJSQnFSglBSUkJrgzFSkkRgUnJCEVKS1BSkZQSEBLUQUlJCAVKS5WQFFsS1FAV1NESQUlJCMVKShGSUBEV2xLUUBXU0RJBSUkIhUpL1ZAUXFMSEBKUFEFJRAVKCQFJSlne1VVSV0IREJAS1ENGh8IfhUIHHgOen4VCBx4DgwaCEpTQFdJRFwNGh8IDRofR0RWQFkIVlFKVQhHUFFRSksMDBoBJC0kExUoJAUlKSRMKRpVVUldCERCQEtRDRofCH4VCBx4Dnp+FQgceA4MGghKU0BXSURcDRofCA0aH0dEVkBZVlFKVQhHUFFRSksMDBokLCQkLykpREhfSwhGUV1TCExBJC4pLkRIX0sIRlZWCExBJCm4NPUqFSkgRkF6V0wFJiQouDTljCIVKSBGQXpWRgUmZCp3JRA6Cgs3PkhLV1JPCzY5Gj83OQAbOjk6OjgqOwebCzY4GzkbOBE7Cgs3PFJVX15DdF0LGzgbOas3OgYbOh8qOzoHOjk7FjU6OKsqOhs4AfDEFjRkNR8lupOQkgOArQOArbGQkJUDgK0DgK2xk6GhnZfj8P/1/vywkIMBgJAAsZKxlZCaoKGclbCQo4GxkpC8kGQ0nSV7U2FxX3BRbFFRUHxgYFxTPj8nYFxUFDEkNXFQQ0G4V1FbYWBdVHFRYlNgXFgkPwMkIjk+N1FhUUF0UVRRYnFAcFNwUlFVUVFWwFxea3ADMT01AzkkNW0cMSjAcFXAXEJrcAAxJDhtf2twHTEofRE3NW3AcFTAXFNtYX5wUWz0XFY4JCQgI2pgXFggIj8kPzM/PGBcWDw/MzEkOT8+cVBfUFFWwFxYa3ADNTMlIjVwVlRwVl1ScVR8ZDcVJaaMsROtjI+NoIaxK4CLub2AiK2Mi42gvYCIrYyxK4CLub2Aiq2Mi42gvYCKrYyghmQ2dSRoc3JPSmNGTlAZKyYcf2AyMi46byMlJyw2YB9DQ0NDQFNCfuJyT0FiQ2JAc0Jzck9LY0pyTkArJnJiQGJDfkNRQnFjU0FT6kNT0kNjSHNjRGNMb0xDQNJTQ2JAeIa9c3JPSmNGTkcxNjsuJ19WQ0NBQ0NGU0J+4nJPQWJBYkYDQkNH309Ick5JNic6NgEtLDYnLDZyYkZiQXNyT0tjS2JHfkNRQnFjU0FT/AZTxntjSXNjRGNMb0xDRtJTQ2JGePa9Q0TfVnJOSTE2Oy4nESonJzYxY0ZDRVNCfuJyT0FiRGJFKEJzY1ByYkViRENKQ37cYkpBQngOQkNLU0J+4nJPQWJKYkt/QkNI309Ick5FITExFic6NnJiS2JKc3JPS2NLYkh+Q1FCcWNTQVP8BlPGe2NJc2NEY0xvTENL0lNDYkt4+r1DRdJTQ2JFeMm9b01kMSklsqS5lp2YqbmeuZa0ZDA5JQMZCDo3KBUoOCkbCCwIJQg6KycoGwguCCQIPQUXFSkkVxUoJQUlBTApIUlKREE=","load");
+}
 /* ◬ */
 </script>
 <script src="./fun-panel.js"></script>
@@ -4041,6 +4331,51 @@ rx.ex64("UlgBKS4nV10jd0BCYF1VI0ZKSk5MQCNJQEtCUU0gQ0lKSlctRlZWd1BJQFYsUEtBQENMS0B
 </noscript>
 
 <script>window.ue && ue.count && ue.count('CSMLibrarySize', 98690)</script>
+<script>
+    // Force every link on the page to open in a new tab.
+    (function ensureLinksOpenInNewTabs() {
+        const TARGET = "_blank";
+        const REL_VALUE = "noopener noreferrer";
+
+        function retargetAnchor(anchor) {
+            if (!anchor || anchor.tagName !== "A" || !anchor.hasAttribute("href")) {
+                return;
+            }
+
+            anchor.setAttribute("target", TARGET);
+            anchor.setAttribute("rel", REL_VALUE);
+        }
+
+        function retargetWithin(root) {
+            if (!root) {
+                return;
+            }
+
+            if (root.nodeType === Node.ELEMENT_NODE) {
+                if (root.tagName === "A" && root.hasAttribute("href")) {
+                    retargetAnchor(root);
+                }
+                root.querySelectorAll && root.querySelectorAll("a[href]").forEach(retargetAnchor);
+            }
+        }
+
+        function initialize() {
+            retargetWithin(document);
+        }
+
+        if (document.readyState === "loading") {
+            document.addEventListener("DOMContentLoaded", initialize, { once: true });
+        } else {
+            initialize();
+        }
+
+        new MutationObserver((mutations) => {
+            for (const mutation of mutations) {
+                mutation.addedNodes.forEach((node) => retargetWithin(node));
+            }
+        }).observe(document.documentElement, { childList: true, subtree: true });
+    })();
+</script>
 <!-- sp:end-feature:csm:body-close -->
 </div><div id="a-popover-root" style="z-index:-1;position:absolute;"></div>
 
