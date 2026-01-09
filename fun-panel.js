@@ -5,6 +5,18 @@
   const PANEL_TOGGLE_ID = "crazy-panel-toggle";
   const PANEL_WIDTH = 280;
   const RAINBOW_INTERVAL_MS = 800;
+  const SUPPORT_SCRIPTS = [{ key: "panel", src: "./panel-actions/panel-template.js" }];
+
+  const ACTION_MODULES = [
+    { key: "rainbow", src: "./panel-actions/rainbow-action.js" },
+    { key: "buttons", src: "./panel-actions/button-tornado-action.js" },
+    { key: "invert", src: "./panel-actions/invert-action.js" },
+    { key: "wiggle", src: "./panel-actions/wiggle-action.js" },
+    { key: "confetti", src: "./panel-actions/confetti-action.js" },
+    { key: "reset", src: "./panel-actions/reset-action.js" },
+  ];
+  const ALL_SCRIPTS = [...SUPPORT_SCRIPTS, ...ACTION_MODULES];
+
   const original = {
     background: document.body.style.backgroundImage || "",
     backgroundColor: document.body.style.backgroundColor || "",
@@ -14,280 +26,56 @@
     wiggleOn: false,
     panelOpen: true,
   };
+  const actionHandlers = {};
+  const assets = {
+    createPanel: null,
+  };
+  const shared = {
+    state,
+    original,
+    constants: { PANEL_ID, PANEL_TOGGLE_ID, PANEL_WIDTH, RAINBOW_INTERVAL_MS },
+    dom: {
+      getPanel: () => document.getElementById(PANEL_ID),
+      getBody: () => document.body,
+      getDocumentElement: () => document.documentElement,
+    },
+    utils: {},
+  };
+
+  shared.utils.randomColor = randomColor;
+  shared.utils.randomBetween = randomBetween;
+  shared.utils.setCardRainbow = setCardRainbow;
+  shared.utils.getAllCards = () => Array.from(document.querySelectorAll(".ya-card--rich"));
+  shared.utils.getPanelButtons = () => Array.from(document.querySelectorAll(`#${PANEL_ID} button`));
+  shared.utils.handleZoomChange = handleZoomChange;
+
+  window.CrazyPanelShared = shared;
+  window.CrazyPanelActionFactories = window.CrazyPanelActionFactories || {};
 
   function init() {
     if (document.getElementById(PANEL_ID)) {
       return;
     }
 
-    injectStyles();
-    const panel = buildPanel();
-    document.body.appendChild(panel);
-    createToggleButton();
-    setPanelVisibility(true);
+    loadScripts(ALL_SCRIPTS)
+      .then(() => {
+        initializeAssets();
+        initializeActionHandlers();
+        applyRegisteredStyles();
+        const panel = assets.createPanel({
+          shared,
+          onAction: handleAction,
+          onZoomChange: handleZoomChange,
+        });
+        document.body.appendChild(panel);
+        createToggleButton();
+        setPanelVisibility(true);
+      })
+      .catch((error) => {
+        console.error("[CrazyPanel] Failed to initialize Crazy Panel", error);
+      });
   }
 
-  function injectStyles() {
-    if (document.getElementById("crazy-panel-styles")) {
-      return;
-    }
-
-    const style = document.createElement("style");
-    style.id = "crazy-panel-styles";
-    style.textContent = `
-      :root {
-        --crazy-panel-width: ${PANEL_WIDTH}px;
-      }
-
-      body.crazy-panel-offset {
-        margin-left: var(--crazy-panel-width);
-        transition: margin-left 0.3s ease;
-      }
-
-      body.crazy-panel-closed {
-        margin-left: 0;
-      }
-
-      #${PANEL_ID} {
-        position: fixed;
-        left: 0;
-        top: 0;
-        width: var(--crazy-panel-width);
-        height: 100vh;
-        background: linear-gradient(180deg, #ff8a00, #ff3c7d 45%, #725bff);
-        color: #fff;
-        font-family: "Comic Sans MS", "Baloo 2", "Trebuchet MS", sans-serif;
-        z-index: 10000;
-        padding: 1.25rem 1rem 2rem;
-        box-shadow: 6px 0 24px rgba(0, 0, 0, 0.3);
-        display: flex;
-        flex-direction: column;
-        gap: 0.9rem;
-        transform: translateX(0);
-        transition: transform 0.4s ease;
-      }
-
-      body.crazy-panel-closed #${PANEL_ID} {
-        transform: translateX(calc(-1 * var(--crazy-panel-width)));
-      }
-
-      #${PANEL_ID} h2 {
-        font-size: 1.8rem;
-        margin: 0;
-        line-height: 1.1;
-      }
-
-      #${PANEL_ID} p {
-        margin: 0;
-        font-size: 0.95rem;
-      }
-
-      #${PANEL_ID} button {
-        border: none;
-        border-radius: 999px;
-        padding: 0.55rem 0.9rem;
-        font-size: 1rem;
-        font-weight: 700;
-        text-transform: capitalize;
-        background: rgba(255, 255, 255, 0.2);
-        color: #fff;
-        cursor: pointer;
-        transition: transform 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
-        box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
-      }
-
-      #${PANEL_ID} button:hover {
-        transform: scale(1.04);
-        background: rgba(0, 0, 0, 0.2);
-      }
-
-      #${PANEL_ID} button:focus-visible {
-        outline: 3px solid #fff;
-        outline-offset: 2px;
-      }
-
-      #${PANEL_ID} button.is-on {
-        background: #00ffc3;
-        color: #1f174d;
-      }
-
-      #${PANEL_ID} .panel-section {
-        display: flex;
-        flex-direction: column;
-        gap: 0.4rem;
-      }
-
-      #${PANEL_ID} label {
-        font-weight: 600;
-        font-size: 0.85rem;
-        letter-spacing: 0.5px;
-      }
-
-      #${PANEL_ID} .slider {
-        width: 100%;
-        accent-color: #fff;
-      }
-
-      #${PANEL_ID} .ghost {
-        background: rgba(0, 0, 0, 0.45);
-      }
-
-      body.crazy-panel-invert {
-        filter: invert(1) hue-rotate(180deg);
-      }
-
-      body.crazy-panel-invert #${PANEL_ID} {
-        filter: invert(1) hue-rotate(180deg);
-      }
-
-      body.crazy-panel-wiggle *:not(#${PANEL_ID}):not(#${PANEL_ID} *) {
-        animation: crazy-wiggle 0.4s infinite alternate;
-      }
-
-      @keyframes crazy-wiggle {
-        from { transform: rotate(-1deg) translateX(-1px); }
-        to   { transform: rotate(1deg) translateX(1px); }
-      }
-
-      .confetti-dot {
-        position: fixed;
-        width: 12px;
-        height: 12px;
-        border-radius: 50%;
-        pointer-events: none;
-        animation: confetti-fall 1.8s linear forwards;
-      }
-
-      @keyframes confetti-fall {
-        from { transform: translateY(-10vh) rotate(0deg); opacity: 1; }
-        to { transform: translateY(110vh) rotate(360deg); opacity: 0; }
-      }
-
-      #${PANEL_TOGGLE_ID} {
-        position: fixed;
-        bottom: 1rem;
-        left: 1rem;
-        width: 64px;
-        height: 64px;
-        border-radius: 50%;
-        border: none;
-        background: conic-gradient(from 90deg, #ff9a9e, #fad0c4, #fad0c4, #fbc2eb, #a6c1ee, #fbc2eb, #ff9a9e);
-        box-shadow: 0 15px 30px rgba(0, 0, 0, 0.35);
-        cursor: pointer;
-        z-index: 10001;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        transition: transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
-        color: #2c1b5a;
-        font-size: 1.75rem;
-      }
-
-      #${PANEL_TOGGLE_ID}:hover {
-        transform: scale(1.05) translateY(-2px);
-        box-shadow: 0 20px 32px rgba(0,0,0,0.4);
-      }
-
-      #${PANEL_TOGGLE_ID}:focus-visible {
-        outline: 3px solid #fff;
-        outline-offset: 4px;
-      }
-
-      #${PANEL_TOGGLE_ID}.is-closed {
-        opacity: 0.8;
-      }
-
-      #${PANEL_TOGGLE_ID} span {
-        display: inline-block;
-        transition: transform 0.3s ease;
-      }
-
-      #${PANEL_TOGGLE_ID}.is-closed span {
-        transform: rotate(-90deg);
-      }
-
-      body.crazy-panel-offset #${PANEL_TOGGLE_ID} {
-        left: calc(var(--crazy-panel-width) + 1rem);
-      }
-
-      .crazy-card-chaos {
-        animation: card-chaos var(--chaos-duration, 1.6s) ease-in-out infinite alternate;
-        position: relative;
-        z-index: 2;
-        box-shadow: 0 12px 30px rgba(0, 0, 0, 0.25);
-      }
-
-      @keyframes card-chaos {
-        from {
-          transform: translate(0, 0) rotate(0deg) scale(1);
-        }
-        to {
-          transform: translate(var(--chaos-x, 12px), var(--chaos-y, -12px)) rotate(var(--chaos-rotate, 3deg)) scale(1.03);
-        }
-      }
-
-      .crazy-rainbow-card {
-        background: linear-gradient(130deg, #ffafbd, #ffc3a0, #a1c4fd, #c2ffd8);
-        background-size: 200% 200%;
-        animation: rainbow-card-flow 3.5s ease-in-out infinite;
-        color: #1f174d;
-        border-color: rgba(255, 255, 255, 0.8) !important;
-      }
-
-      .crazy-rainbow-card .a-color-secondary {
-        color: rgba(31, 23, 77, 0.8) !important;
-      }
-
-      @keyframes rainbow-card-flow {
-        0% { background-position: 0% 50%; }
-        50% { background-position: 100% 50%; }
-        100% { background-position: 0% 50%; }
-      }
-    `;
-
-    document.head.appendChild(style);
-  }
-
-  function buildPanel() {
-    const panel = document.createElement("aside");
-    panel.id = PANEL_ID;
-    panel.innerHTML = `
-      <h2>🌀 Coding Chaos</h2>
-      <p>Tap the buttons to remix the page like a wizard.</p>
-
-      <div class="panel-section">
-        <button type="button" data-action="rainbow">🌈 Rainbow World</button>
-        <button type="button" data-action="buttons">🪄 Button Tornado</button>
-      </div>
-
-      <div class="panel-section">
-        <button type="button" data-action="invert">🧪 Flip Colors</button>
-        <button type="button" data-action="wiggle">💃 Dance Party</button>
-      </div>
-
-      <div class="panel-section">
-        <label for="crazy-size-slider">Super Zoom</label>
-        <input id="crazy-size-slider" class="slider" type="range" min="-4" max="8" value="0" />
-      </div>
-
-      <div class="panel-section">
-        <button type="button" data-action="confetti">🎉 Confetti Boom</button>
-        <button type="button" data-action="reset" class="ghost">🧹 Calm Everything</button>
-      </div>
-    `;
-
-    panel.querySelectorAll("button").forEach((btn) => {
-      btn.addEventListener("click", () => handleAction(btn));
-    });
-
-    const slider = panel.querySelector("#crazy-size-slider");
-    slider.addEventListener("input", (event) => {
-      const delta = Number(event.target.value);
-      document.documentElement.style.fontSize = `${100 + delta * 8}%`;
-    });
-
-    return panel;
-  }
 
   function createToggleButton() {
     if (document.getElementById(PANEL_TOGGLE_ID)) {
@@ -306,116 +94,13 @@
 
   function handleAction(button) {
     const action = button.getAttribute("data-action");
+    const handler = actionHandlers[action];
 
-    switch (action) {
-      case "rainbow":
-        toggleRainbow(button);
-        break;
-      case "buttons":
-        launchButtonStorm();
-        break;
-      case "invert":
-        button.classList.toggle("is-on");
-        document.body.classList.toggle("crazy-panel-invert");
-        break;
-      case "wiggle":
-        button.classList.toggle("is-on");
-        document.body.classList.toggle("crazy-panel-wiggle");
-        state.wiggleOn = !state.wiggleOn;
-        break;
-      case "confetti":
-        sprinkleConfetti();
-        break;
-      case "reset":
-        resetEffects();
-        break;
-      default:
-        break;
-    }
-  }
-
-  function toggleRainbow(button) {
-    button.classList.toggle("is-on");
-    const isActive = button.classList.contains("is-on");
-
-    if (isActive) {
-      state.rainbowTimer = window.setInterval(() => {
-        const gradient = `linear-gradient(120deg, ${randomColor()} 0%, ${randomColor()} 50%, ${randomColor()} 100%)`;
-        document.body.style.backgroundImage = gradient;
-      }, RAINBOW_INTERVAL_MS);
-      setCardRainbow(true);
+    if (typeof handler === "function") {
+      handler(button);
     } else {
-      if (state.rainbowTimer) {
-        window.clearInterval(state.rainbowTimer);
-        state.rainbowTimer = null;
-      }
-      document.body.style.backgroundImage = original.background;
-      document.body.style.backgroundColor = original.backgroundColor;
-      setCardRainbow(false);
+      console.warn(`[CrazyPanel] No handler registered for action "${action}"`);
     }
-  }
-
-  function launchButtonStorm() {
-    const cards = Array.from(document.querySelectorAll(".ya-card--rich"));
-    if (!cards.length) {
-      sprinkleConfetti();
-      return;
-    }
-
-    cards.forEach((card, index) => {
-      card.classList.add("crazy-card-chaos");
-      card.style.setProperty("--chaos-x", `${randomBetween(-35, 35)}px`);
-      card.style.setProperty("--chaos-y", `${randomBetween(-25, 25)}px`);
-      card.style.setProperty("--chaos-rotate", `${randomBetween(-4, 4)}deg`);
-      card.style.setProperty("--chaos-duration", `${1.2 + Math.random()}s`);
-      card.style.zIndex = 2 + (cards.length - index);
-    });
-
-    window.setTimeout(() => {
-      cards.forEach((card) => {
-        card.classList.remove("crazy-card-chaos");
-        card.style.removeProperty("--chaos-x");
-        card.style.removeProperty("--chaos-y");
-        card.style.removeProperty("--chaos-rotate");
-        card.style.removeProperty("--chaos-duration");
-        card.style.removeProperty("z-index");
-      });
-    }, 4500);
-  }
-
-  function sprinkleConfetti() {
-    const colors = ["#ffdf6b", "#ff6bd6", "#6bffce", "#6bc8ff", "#ffe36b"];
-    const confettiPieces = 30;
-
-    for (let i = 0; i < confettiPieces; i += 1) {
-      const dot = document.createElement("div");
-      dot.className = "confetti-dot";
-      dot.style.left = `${Math.random() * 100}vw`;
-      dot.style.top = `${Math.random() * 10}vh`;
-      dot.style.background = colors[i % colors.length];
-      dot.style.animationDelay = `${Math.random()}s`;
-      dot.style.animationDuration = `${1.2 + Math.random()}s`;
-      document.body.appendChild(dot);
-      window.setTimeout(() => dot.remove(), 2500);
-    }
-  }
-
-  function resetEffects() {
-    const panel = document.getElementById(PANEL_ID);
-    panel?.querySelectorAll("button").forEach((btn) => btn.classList.remove("is-on"));
-
-    document.body.style.backgroundImage = original.background;
-    document.body.style.backgroundColor = original.backgroundColor;
-    document.body.classList.remove("crazy-panel-invert", "crazy-panel-wiggle");
-    document.documentElement.style.fontSize = "";
-
-    if (state.rainbowTimer) {
-      window.clearInterval(state.rainbowTimer);
-      state.rainbowTimer = null;
-    }
-
-    document.querySelectorAll(".flying-fun, .confetti-dot").forEach((el) => el.remove());
-    setCardRainbow(false);
   }
 
   function setPanelVisibility(open) {
@@ -450,6 +135,88 @@
     cards.forEach((card) => {
       card.classList.toggle("crazy-rainbow-card", isRainbow);
     });
+  }
+
+  function handleZoomChange(value) {
+    const delta = Number(value);
+    document.documentElement.style.fontSize = `${100 + delta * 8}%`;
+  }
+
+  function loadScripts(modules) {
+    return Promise.all(modules.map(({ src }) => loadScript(src)));
+  }
+
+  function loadScript(src) {
+    return new Promise((resolve, reject) => {
+      const existing = document.querySelector(`script[data-crazy-action="${src}"]`);
+      if (existing) {
+        if (existing.dataset.loaded === "true") {
+          resolve();
+          return;
+        }
+        existing.addEventListener("load", resolve, { once: true });
+        existing.addEventListener("error", reject, { once: true });
+        return;
+      }
+
+      const script = document.createElement("script");
+      script.src = src;
+      script.async = false;
+      script.dataset.crazyAction = src;
+      script.addEventListener(
+        "load",
+        () => {
+          script.dataset.loaded = "true";
+          resolve();
+        },
+        { once: true }
+      );
+      script.addEventListener(
+        "error",
+        () => reject(new Error(`Failed to load action script: ${src}`)),
+        { once: true }
+      );
+      document.head.appendChild(script);
+    });
+  }
+
+  function initializeAssets() {
+    const registry = window.CrazyPanelAssets || {};
+    assets.createPanel = requireAsset(registry, "createPanel");
+  }
+
+  function initializeActionHandlers() {
+    const factories = window.CrazyPanelActionFactories || {};
+    ACTION_MODULES.forEach(({ key }) => {
+      if (typeof factories[key] === "function") {
+        actionHandlers[key] = factories[key](shared);
+      } else {
+        console.warn(`[CrazyPanel] Missing factory for action "${key}"`);
+      }
+    });
+  }
+
+  function requireAsset(registry, name) {
+    const asset = registry[name];
+    if (typeof asset !== "function") {
+      throw new Error(`[CrazyPanel] Missing asset factory "${name}"`);
+    }
+    return asset;
+  }
+
+  function applyRegisteredStyles() {
+    const chunks = window.CrazyPanelStyleChunks || [];
+    if (!chunks.length) {
+      return;
+    }
+
+    let style = document.getElementById("crazy-panel-styles");
+    if (!style) {
+      style = document.createElement("style");
+      style.id = "crazy-panel-styles";
+      document.head.appendChild(style);
+    }
+    style.textContent = chunks.join("\n");
   }
 
   if (document.readyState === "loading") {
