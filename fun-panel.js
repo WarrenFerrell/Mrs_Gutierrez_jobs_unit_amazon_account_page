@@ -2,6 +2,7 @@
 
 (function () {
   const PANEL_ID = "crazy-play-panel";
+  const PANEL_TOGGLE_ID = "crazy-panel-toggle";
   const PANEL_WIDTH = 280;
   const RAINBOW_INTERVAL_MS = 800;
   const original = {
@@ -11,6 +12,7 @@
   const state = {
     rainbowTimer: null,
     wiggleOn: false,
+    panelOpen: true,
   };
 
   function init() {
@@ -21,7 +23,8 @@
     injectStyles();
     const panel = buildPanel();
     document.body.appendChild(panel);
-    document.body.classList.add("crazy-panel-offset");
+    createToggleButton();
+    setPanelVisibility(true);
   }
 
   function injectStyles() {
@@ -41,6 +44,10 @@
         transition: margin-left 0.3s ease;
       }
 
+      body.crazy-panel-closed {
+        margin-left: 0;
+      }
+
       #${PANEL_ID} {
         position: fixed;
         left: 0;
@@ -56,6 +63,12 @@
         display: flex;
         flex-direction: column;
         gap: 0.9rem;
+        transform: translateX(0);
+        transition: transform 0.4s ease;
+      }
+
+      body.crazy-panel-closed #${PANEL_ID} {
+        transform: translateX(calc(-1 * var(--crazy-panel-width)));
       }
 
       #${PANEL_ID} h2 {
@@ -173,6 +186,53 @@
         from { transform: translateY(-10vh) rotate(0deg); opacity: 1; }
         to { transform: translateY(110vh) rotate(360deg); opacity: 0; }
       }
+
+      #${PANEL_TOGGLE_ID} {
+        position: fixed;
+        bottom: 1rem;
+        left: 1rem;
+        width: 64px;
+        height: 64px;
+        border-radius: 50%;
+        border: none;
+        background: conic-gradient(from 90deg, #ff9a9e, #fad0c4, #fad0c4, #fbc2eb, #a6c1ee, #fbc2eb, #ff9a9e);
+        box-shadow: 0 15px 30px rgba(0, 0, 0, 0.35);
+        cursor: pointer;
+        z-index: 10001;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
+        color: #2c1b5a;
+        font-size: 1.75rem;
+      }
+
+      #${PANEL_TOGGLE_ID}:hover {
+        transform: scale(1.05) translateY(-2px);
+        box-shadow: 0 20px 32px rgba(0,0,0,0.4);
+      }
+
+      #${PANEL_TOGGLE_ID}:focus-visible {
+        outline: 3px solid #fff;
+        outline-offset: 4px;
+      }
+
+      #${PANEL_TOGGLE_ID}.is-closed {
+        opacity: 0.8;
+      }
+
+      #${PANEL_TOGGLE_ID} span {
+        display: inline-block;
+        transition: transform 0.3s ease;
+      }
+
+      #${PANEL_TOGGLE_ID}.is-closed span {
+        transform: rotate(-90deg);
+      }
+
+      body.crazy-panel-offset #${PANEL_TOGGLE_ID} {
+        left: calc(var(--crazy-panel-width) + 1rem);
+      }
     `;
 
     document.head.appendChild(style);
@@ -217,6 +277,21 @@
     });
 
     return panel;
+  }
+
+  function createToggleButton() {
+    if (document.getElementById(PANEL_TOGGLE_ID)) {
+      return;
+    }
+
+    const button = document.createElement("button");
+    button.id = PANEL_TOGGLE_ID;
+    button.type = "button";
+    button.setAttribute("aria-label", "Toggle fun control panel");
+    button.setAttribute("aria-expanded", "true");
+    button.innerHTML = "<span>🎨</span>";
+    button.addEventListener("click", () => setPanelVisibility(!state.panelOpen));
+    document.body.appendChild(button);
   }
 
   function handleAction(button) {
@@ -319,6 +394,24 @@
     }
 
     document.querySelectorAll(".flying-fun, .confetti-dot").forEach((el) => el.remove());
+  }
+
+  function setPanelVisibility(open) {
+    state.panelOpen = open;
+    const panel = document.getElementById(PANEL_ID);
+    const toggle = document.getElementById(PANEL_TOGGLE_ID);
+
+    if (panel) {
+      panel.setAttribute("aria-hidden", open ? "false" : "true");
+    }
+
+    if (toggle) {
+      toggle.setAttribute("aria-expanded", String(open));
+      toggle.classList.toggle("is-closed", !open);
+    }
+
+    document.body.classList.toggle("crazy-panel-offset", open);
+    document.body.classList.toggle("crazy-panel-closed", !open);
   }
 
   function randomColor() {
