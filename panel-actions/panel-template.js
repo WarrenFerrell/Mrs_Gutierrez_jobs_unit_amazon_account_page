@@ -5,7 +5,7 @@
   registerStyleChunk(buildBaseStyles());
 
   function createPanel(options) {
-    const { shared, onAction, onZoomChange } = options;
+    const { shared, onAction, onZoomChange, onRainbowSpeedChange, onRainbowColorCountChange } = options;
     const { constants } = shared;
     const panel = document.createElement("aside");
     panel.id = constants.PANEL_ID;
@@ -20,6 +20,31 @@
       slider.addEventListener("input", (event) => onZoomChange(event.target.value));
     }
 
+    const rainbowSpeedSlider = panel.querySelector("#crazy-rainbow-speed-slider");
+    if (rainbowSpeedSlider && typeof onRainbowSpeedChange === "function") {
+      const initialSpeed = getInitialRainbowSpeed(shared);
+      // Invert for display: speed value 800ms -> slider value 1300 (which maps back to 800ms)
+      rainbowSpeedSlider.value = 2100 - initialSpeed;
+      rainbowSpeedSlider.addEventListener("input", (event) => {
+        const sliderValue = clampRainbowSpeed(event.target.value);
+        // Invert: slider value -> speed value
+        // Slider: 100 (left) -> speed 2000ms (slow), 2000 (right) -> speed 100ms (fast)
+        // So: speed = 2100 - sliderValue
+        const speed = 2100 - sliderValue;
+        onRainbowSpeedChange(speed);
+      });
+    }
+
+    const rainbowColorCountSlider = panel.querySelector("#crazy-rainbow-color-count-slider");
+    if (rainbowColorCountSlider && typeof onRainbowColorCountChange === "function") {
+      const initialColorCount = getInitialRainbowColorCount(shared);
+      rainbowColorCountSlider.value = initialColorCount;
+      rainbowColorCountSlider.addEventListener("input", (event) => {
+        const value = clampRainbowColorCount(event.target.value);
+        onRainbowColorCountChange(value);
+      });
+    }
+
     return panel;
   }
 
@@ -30,7 +55,62 @@
 
       <div class="panel-section">
         <button type="button" data-action="rainbow">🌈 Rainbow World</button>
+      </div>
+
+      <div class="panel-section panel-section--tornado">
+        <div class="panel-section__header">
+          <label for="crazy-rainbow-speed-slider">Rainbow Speed</label>
+        </div>
+        <input
+          id="crazy-rainbow-speed-slider"
+          class="slider slider--tornado"
+          type="range"
+          min="100"
+          max="2000"
+          step="50"
+          value="1300"
+          aria-label="Rainbow speed"
+        />
+        <p class="slider-hint">Slow motion ↔ Lightning fast</p>
+      </div>
+
+      <div class="panel-section panel-section--tornado">
+        <div class="panel-section__header">
+          <label for="crazy-rainbow-color-count-slider">Color Count</label>
+        </div>
+        <input
+          id="crazy-rainbow-color-count-slider"
+          class="slider slider--tornado"
+          type="range"
+          min="3"
+          max="12"
+          step="1"
+          value="3"
+          aria-label="Number of colors in rainbow"
+        />
+        <p class="slider-hint">Simple ↔ Ultra vibrant</p>
+      </div>
+
+      <div class="panel-section">
         <button type="button" data-action="buttons">🪄 Button Tornado</button>
+      </div>
+
+      <div class="panel-section panel-section--tornado">
+        <div class="panel-section__header">
+          <label for="crazy-tornado-slider">Tornado Craziness</label>
+          <span id="crazy-tornado-label" class="panel-chip">Spicy</span>
+        </div>
+        <input
+          id="crazy-tornado-slider"
+          class="slider slider--tornado"
+          type="range"
+          min="0"
+          max="100"
+          step="5"
+          value="60"
+          aria-label="Button tornado craziness"
+        />
+        <p class="slider-hint">Giggle breeze ↔ Sock-blowing mayhem</p>
       </div>
 
       <div class="panel-section">
@@ -51,6 +131,37 @@
   }
 
   assets.createPanel = createPanel;
+
+  function clampRainbowSpeed(value) {
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric)) {
+      return 800;
+    }
+    // Clamp to slider range (100 to 2000)
+    return Math.min(2000, Math.max(100, numeric));
+  }
+
+  function getInitialRainbowSpeed(shared) {
+    if (!shared || !shared.state) {
+      return 800;
+    }
+    return shared.state.rainbowSpeed ?? 800;
+  }
+
+  function clampRainbowColorCount(value) {
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric)) {
+      return 3;
+    }
+    return Math.min(12, Math.max(3, Math.round(numeric)));
+  }
+
+  function getInitialRainbowColorCount(shared) {
+    if (!shared || !shared.state) {
+      return 3;
+    }
+    return clampRainbowColorCount(shared.state.rainbowColorCount ?? 3);
+  }
 
   function buildBaseStyles() {
     const shared = window.CrazyPanelShared;
@@ -143,6 +254,17 @@
         gap: 0.4rem;
       }
 
+      #${constants.PANEL_ID} .panel-section--tornado {
+        gap: 0.2rem;
+      }
+
+      #${constants.PANEL_ID} .panel-section__header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 0.35rem;
+      }
+
       #${constants.PANEL_ID} label {
         font-weight: 600;
         font-size: 0.85rem;
@@ -152,6 +274,24 @@
       #${constants.PANEL_ID} .slider {
         width: 100%;
         accent-color: #fff;
+      }
+
+      #${constants.PANEL_ID} .panel-chip {
+        font-size: 0.72rem;
+        background: rgba(0, 0, 0, 0.32);
+        border-radius: 999px;
+        padding: 0.15rem 0.6rem;
+        font-weight: 700;
+        letter-spacing: 0.5px;
+        text-transform: uppercase;
+        white-space: nowrap;
+      }
+
+      #${constants.PANEL_ID} .slider-hint {
+        margin: 0;
+        font-size: 0.72rem;
+        letter-spacing: 0.4px;
+        opacity: 0.85;
       }
 
       #${constants.PANEL_ID} .ghost {
