@@ -27,7 +27,7 @@
     rainbowTimer: null,
     wiggleOn: false,
     panelOpen: true,
-    tornadoIntensity: 10,
+    tornadoIntensity: 0,
     rainbowSpeed: RAINBOW_DEFAULT_SPEED_MS,
     rainbowColorCount: 3,
     rainbowSpeedUnlocked: false,

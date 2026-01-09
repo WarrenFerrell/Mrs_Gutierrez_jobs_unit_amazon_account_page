@@ -3,24 +3,29 @@
 (function () {
   const TORNADO_CONFIG = {
     sliderMax: 180,
-    defaultIntensity: 10,
-    chaosSeedMin: 0.18,
-    chaosSeedMax: 0.82,
-    logisticRXMin: 3.4,
-    logisticRXMax: 3.7,
-    logisticRYMin: 3.5,
-    logisticRYMax: 3.8,
-    speedMin: 0.65,
-    speedMax: 1.05,
-    horizontalBase: 0.015,
-    horizontalScale: 0.45,
-    verticalBase: 20,
-    verticalScale: 180,
-    tiltBase: 2,
-    tiltScale: 10,
-    stepBase: 0.00025,
-    stepScale: 0.0032,
-    normalizedExponent: 2.4,
+    defaultIntensity: 0,
+    minActiveIntensity: 0.02,
+    initialSpeedMin: 0.18,
+    initialSpeedMax: 1.4,
+    wanderPhaseMin: 0,
+    wanderPhaseMax: Math.PI * 2,
+    wanderSpeedMin: 0.55,
+    wanderSpeedMax: 1.55,
+    gravityBase: 0.012,
+    gravityScale: 0.42,
+    dampingBase: 0.1,
+    dampingScale: 0.28,
+    noiseBase: 0.0009,
+    noiseScale: 0.0032,
+    centerCaptureBase: 55,
+    centerCaptureScale: 180,
+    homeCaptureBase: 110,
+    homeCaptureScale: 110,
+    returnBoostBase: 0.0012,
+    returnBoostScale: 0.0036,
+    maxDelta: 0.08,
+    softening: 5,
+    normalizedExponent: 3.4,
   };
   const MOOD_RANGES = [
     { max: 20, label: "Breezy" },
@@ -130,24 +135,64 @@
 
   function startTornado(runtime, cards) {
     runtime.active = true;
+    const viewportWidth = window.innerWidth || document.documentElement.clientWidth || 1200;
+    const viewportHeight = window.innerHeight || document.documentElement.clientHeight || 800;
+    const viewportCenterX = viewportWidth / 2;
+    const viewportCenterY = viewportHeight / 2;
+
+    runtime.masses = buildMasses(viewportCenterX, viewportCenterY, viewportHeight);
+
+    const baseIntensity = getNormalizedIntensity(runtime.stateRef);
+
     runtime.cards = cards.map((card) => {
       const rect = card.getBoundingClientRect();
-      const viewportCenter = (window.innerWidth || document.documentElement.clientWidth || 1200) / 2;
-      const direction = rect.left < viewportCenter ? 1 : -1;
+      const cardCenterX = rect.left + rect.width / 2;
+      const cardCenterY = rect.top + rect.height / 2;
+      const centerOffsetX = viewportCenterX - cardCenterX;
+      const centerOffsetY = viewportCenterY - cardCenterY;
+      const originVector = { x: -centerOffsetX, y: -centerOffsetY };
+      const originDistance = Math.hypot(originVector.x, originVector.y) || 1;
+      const originNormal = {
+        x: originVector.x / originDistance,
+        y: originVector.y / originDistance,
+      };
+      const { homeTarget, homeNormal } = createHomeTarget(originNormal, originDistance, runtime);
+      const intensitySpeedScale = 0.25 + baseIntensity * 1.0;
+      const initialSpeed =
+        runtime.randomBetween(
+          TORNADO_CONFIG.initialSpeedMin,
+          TORNADO_CONFIG.initialSpeedMax * intensitySpeedScale
+        ) * (0.7 + Math.random() * 0.35);
+      const initialAngle = runtime.randomBetween(0, Math.PI * 2);
+      let initialVelocity = {
+        x: Math.cos(initialAngle) * initialSpeed,
+        y: Math.sin(initialAngle) * initialSpeed,
+      };
+      const centerDirection = { x: centerOffsetX, y: centerOffsetY };
+      const dot =
+        initialVelocity.x * centerDirection.x + initialVelocity.y * centerDirection.y;
+      if (dot > 0) {
+        initialVelocity = { x: -initialVelocity.x, y: -initialVelocity.y };
+      }
+
       return {
         el: card,
         baseTransform: card.style.transform || "",
-        direction,
-        progress: 0,
-        chaosX: runtime.randomBetween(TORNADO_CONFIG.chaosSeedMin, TORNADO_CONFIG.chaosSeedMax),
-        chaosY: runtime.randomBetween(TORNADO_CONFIG.chaosSeedMin, TORNADO_CONFIG.chaosSeedMax),
-        rX: runtime.randomBetween(TORNADO_CONFIG.logisticRXMin, TORNADO_CONFIG.logisticRXMax),
-        rY: runtime.randomBetween(TORNADO_CONFIG.logisticRYMin, TORNADO_CONFIG.logisticRYMax),
-        speed: runtime.randomBetween(TORNADO_CONFIG.speedMin, TORNADO_CONFIG.speedMax),
+        position: { x: 0, y: 0 },
+        velocity: initialVelocity,
+        originCenter: { x: cardCenterX, y: cardCenterY },
+        home: homeTarget,
+        homeNormal,
+        originNormal,
+        originDistance,
+        mode: "inbound",
+        wanderPhase: runtime.randomBetween(TORNADO_CONFIG.wanderPhaseMin, TORNADO_CONFIG.wanderPhaseMax),
+        wanderSpeed: runtime.randomBetween(TORNADO_CONFIG.wanderSpeedMin, TORNADO_CONFIG.wanderSpeedMax),
       };
     });
 
-    const step = () => animateCards(runtime);
+    runtime.lastTimestamp = null;
+    const step = (timestamp) => animateCards(runtime, timestamp);
     runtime.rafId = window.requestAnimationFrame(step);
   }
 
@@ -170,52 +215,128 @@
     }
   }
 
-  function animateCards(runtime) {
+  function animateCards(runtime, timestamp) {
     if (!runtime.active) {
       return;
     }
 
     const intensity = getNormalizedIntensity(runtime.stateRef);
-    const viewportWidth = window.innerWidth || document.documentElement.clientWidth || 1200;
-    const horizontalTravel =
-      viewportWidth * (TORNADO_CONFIG.horizontalBase + TORNADO_CONFIG.horizontalScale * intensity);
-    const verticalRange = TORNADO_CONFIG.verticalBase + intensity * TORNADO_CONFIG.verticalScale;
-    const chaosTilt = TORNADO_CONFIG.tiltBase + intensity * TORNADO_CONFIG.tiltScale;
-    const baseStep = TORNADO_CONFIG.stepBase + intensity * TORNADO_CONFIG.stepScale;
+    const dtMs = runtime.lastTimestamp ? Math.max(4, Math.min(100, timestamp - runtime.lastTimestamp)) : 16;
+    runtime.lastTimestamp = timestamp;
+    const dtSeconds = Math.min(TORNADO_CONFIG.maxDelta, dtMs / 1000);
+    const frameScale = Math.min(1.2, dtSeconds * 60 || 1);
+
+    const gravityStrength = TORNADO_CONFIG.gravityBase + TORNADO_CONFIG.gravityScale * intensity;
+    const damping = TORNADO_CONFIG.dampingBase + TORNADO_CONFIG.dampingScale * intensity;
+    const noiseStrength = TORNADO_CONFIG.noiseBase + TORNADO_CONFIG.noiseScale * (0.15 + intensity);
+    const centerCaptureRadius = TORNADO_CONFIG.centerCaptureBase + TORNADO_CONFIG.centerCaptureScale * intensity;
+    const homeCaptureRadius = TORNADO_CONFIG.homeCaptureBase + TORNADO_CONFIG.homeCaptureScale * intensity;
+    const returnBoost = TORNADO_CONFIG.returnBoostBase + TORNADO_CONFIG.returnBoostScale * intensity;
+    const gravityActive = intensity > TORNADO_CONFIG.minActiveIntensity;
+    const activeMass = runtime.masses[selectMassIndex()];
 
     runtime.cards.forEach((cardData) => {
-      cardData.chaosX = logisticStep(cardData.chaosX, cardData.rX);
-      cardData.chaosY = logisticStep(cardData.chaosY, cardData.rY);
+      if (!gravityActive) {
+        cardData.position.x += cardData.velocity.x * frameScale;
+        cardData.position.y += cardData.velocity.y * frameScale;
+        const baseTransform = cardData.baseTransform ? `${cardData.baseTransform} ` : "";
+        cardData.el.style.transform = `${baseTransform}translate3d(${cardData.position.x}px, ${cardData.position.y}px, 0)`;
+        return;
+      }
+      const targetVector =
+        cardData.mode === "inbound"
+          ? getMassVector(cardData, activeMass)
+          : cardData.home;
+      const dx = targetVector.x - cardData.position.x;
+      const dy = targetVector.y - cardData.position.y;
+      // Discrete solution of ∇²Φ = 4πGρ with a point mass at the viewport center.
+      const accGravityX = dx * gravityStrength;
+      const accGravityY = dy * gravityStrength;
 
-      const speedBoost = (0.35 + cardData.chaosX * 0.65) * cardData.speed;
-      cardData.progress += baseStep * speedBoost;
+      cardData.wanderPhase += cardData.wanderSpeed * frameScale * 0.04;
+      const accNoiseX = Math.cos(cardData.wanderPhase) * noiseStrength;
+      const accNoiseY = Math.sin(cardData.wanderPhase * 0.8) * noiseStrength;
 
-      if (cardData.progress >= 1) {
-        cardData.progress = 0;
-        cardData.direction *= -1;
+      let ax = accGravityX + accNoiseX;
+      let ay = accGravityY + accNoiseY;
+
+      if (cardData.mode === "outbound") {
+        ax += cardData.homeNormal.x * returnBoost;
+        ay += cardData.homeNormal.y * returnBoost;
       }
 
-      const eased = easeInOutCubic(cardData.progress);
-      const horizontalOffset = cardData.direction * horizontalTravel * eased;
-      const verticalOffset = (cardData.chaosY - 0.5) * 2 * verticalRange;
-      const rotation = (cardData.chaosX - 0.5) * 2 * chaosTilt;
+      cardData.velocity.x += ax * frameScale;
+      cardData.velocity.y += ay * frameScale;
+
+      const dampingFactor = Math.max(0, 1 - damping * frameScale * 0.5);
+      cardData.velocity.x *= dampingFactor;
+      cardData.velocity.y *= dampingFactor;
+
+      cardData.position.x += cardData.velocity.x * frameScale;
+      cardData.position.y += cardData.velocity.y * frameScale;
 
       const baseTransform = cardData.baseTransform ? `${cardData.baseTransform} ` : "";
-      cardData.el.style.transform = `${baseTransform}translate3d(${horizontalOffset}px, ${verticalOffset}px, 0) rotate(${rotation}deg)`;
+      cardData.el.style.transform = `${baseTransform}translate3d(${cardData.position.x}px, ${cardData.position.y}px, 0)`;
+
+      const distanceToCenter = cardData.mode === "inbound" ? Math.hypot(dx, dy) : null;
+      const distanceToHome = Math.hypot(cardData.home.x - cardData.position.x, cardData.home.y - cardData.position.y);
+
+      if (cardData.mode === "inbound" && distanceToCenter <= centerCaptureRadius) {
+        cardData.mode = "outbound";
+        retargetHome(cardData, runtime);
+        cardData.velocity.x *= 0.25;
+        cardData.velocity.y *= 0.25;
+      } else if (cardData.mode === "outbound" && distanceToHome <= homeCaptureRadius) {
+        cardData.mode = "inbound";
+      }
     });
 
-    runtime.rafId = window.requestAnimationFrame(() => animateCards(runtime));
+    runtime.rafId = window.requestAnimationFrame((nextTs) => animateCards(runtime, nextTs));
   }
 
-  function logisticStep(value, r) {
-    const next = r * value * (1 - value);
-    if (next <= 0) return 0.001;
-    if (next >= 1) return 0.999;
-    return next;
+  function retargetHome(cardData, runtime) {
+    const { homeTarget, homeNormal } = createHomeTarget(cardData.originNormal, cardData.originDistance, runtime);
+    cardData.home = homeTarget;
+    cardData.homeNormal = homeNormal;
   }
 
-  function easeInOutCubic(t) {
-    return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+  function createHomeTarget(originNormal, originDistance, runtime) {
+    const lateral = { x: -originNormal.y, y: originNormal.x };
+    const wanderRadius = originDistance * (0.65 + runtime.randomBetween(-0.12, 0.15));
+    const lateralShift = runtime.randomBetween(-originDistance * 0.2, originDistance * 0.2);
+    const homeTarget = {
+      x: originNormal.x * wanderRadius + lateral.x * lateralShift,
+      y: originNormal.y * wanderRadius + lateral.y * lateralShift,
+    };
+    const homeDistance = Math.hypot(homeTarget.x, homeTarget.y) || 1;
+    const homeNormal = {
+      x: homeTarget.x / homeDistance,
+      y: homeTarget.y / homeDistance,
+    };
+    return { homeTarget, homeNormal };
+  }
+
+  function buildMasses(centerX, centerY, viewHeight) {
+    const verticalGap = viewHeight * 0.22;
+    return [
+      { x: centerX, y: centerY - verticalGap },
+      { x: centerX, y: centerY },
+      { x: centerX, y: centerY + verticalGap },
+    ];
+  }
+
+  function getMassVector(cardData, mass) {
+    return {
+      x: mass.x - cardData.originCenter.x,
+      y: mass.y - cardData.originCenter.y,
+    };
+  }
+
+  function selectMassIndex() {
+    const roll = Math.random();
+    if (roll < 0.4) return 1; // middle mass
+    if (roll < 0.7) return 0; // top
+    return 2; // bottom
   }
 
   function clampTornadoValue(value) {
