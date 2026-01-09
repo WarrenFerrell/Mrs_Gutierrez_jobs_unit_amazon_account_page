@@ -1,6 +1,21 @@
 "use strict";
 
 (function () {
+  // Configuration
+  const CONFIG = {
+    colors: ["#ffdf6b", "#ff6bd6", "#6bffce", "#6bc8ff", "#ffe36b"],
+    confettiPieces: 600,
+    explosionPoints: 30,
+    sizeMin: 24,
+    sizeMax: 36,
+    distanceMin: 400,
+    distanceMax: 1000,
+    durationMin: 2,
+    durationMax: 2.8,
+    animationDelayMax: 0.3,
+    cleanupTimeout: 3500
+  };
+
   registerStyleChunk(`
     .confetti-dot {
       position: fixed;
@@ -28,29 +43,25 @@
   }
 
   function createConfettiAction() {
-    const colors = ["#ffdf6b", "#ff6bd6", "#6bffce", "#6bc8ff", "#ffe36b"];
-    const confettiPieces = 600;
-    const explosionPoints = 30; // Multiple explosion points across screen
-
     return function handleConfetti() {
       const viewportWidth = window.innerWidth;
       const viewportHeight = window.innerHeight;
       
       // Create multiple explosion points distributed across the screen
       const explosionCenters = [];
-      for (let p = 0; p < explosionPoints; p += 1) {
+      for (let p = 0; p < CONFIG.explosionPoints; p += 1) {
         explosionCenters.push({
           x: Math.random() * viewportWidth,
           y: Math.random() * viewportHeight
         });
       }
       
-      for (let i = 0; i < confettiPieces; i += 1) {
+      for (let i = 0; i < CONFIG.confettiPieces; i += 1) {
         const dot = document.createElement("div");
         dot.className = "confetti-dot";
         
-        // Bigger circles: random size between 24px and 36px
-        const size = 24 + Math.random() * 12;
+        // Bigger circles: random size between min and max
+        const size = CONFIG.sizeMin + Math.random() * (CONFIG.sizeMax - CONFIG.sizeMin);
         dot.style.width = `${size}px`;
         dot.style.height = `${size}px`;
         
@@ -58,11 +69,11 @@
         const center = explosionCenters[i % explosionCenters.length];
         dot.style.left = `${center.x}px`;
         dot.style.top = `${center.y}px`;
-        dot.style.background = colors[i % colors.length];
+        dot.style.background = CONFIG.colors[i % CONFIG.colors.length];
         
         // Explosive spread: random angle and larger distance for more coverage
         const angle = Math.random() * Math.PI * 2;
-        const distance = 400 + Math.random() * 600; // 400-1000px explosion radius
+        const distance = CONFIG.distanceMin + Math.random() * (CONFIG.distanceMax - CONFIG.distanceMin);
         const explodeX = Math.cos(angle) * distance;
         const explodeY = Math.sin(angle) * distance;
         
@@ -71,12 +82,12 @@
         dot.style.setProperty("--explode-y", `${explodeY}px`);
         
         // Apply animation with unique duration per piece
-        const duration = 2 + Math.random() * 0.8;
+        const duration = CONFIG.durationMin + Math.random() * (CONFIG.durationMax - CONFIG.durationMin);
         dot.style.animation = `confetti-explode ${duration}s ease-out forwards`;
-        dot.style.animationDelay = `${Math.random() * 0.3}s`;
+        dot.style.animationDelay = `${Math.random() * CONFIG.animationDelayMax}s`;
         
         document.body.appendChild(dot);
-        window.setTimeout(() => dot.remove(), 3500);
+        window.setTimeout(() => dot.remove(), CONFIG.cleanupTimeout);
       }
     };
   }
