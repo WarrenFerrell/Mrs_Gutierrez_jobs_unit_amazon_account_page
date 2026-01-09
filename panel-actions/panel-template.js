@@ -165,7 +165,7 @@
           min="0"
           max="180"
           step="3"
-          value="10"
+          value="0"
           aria-label="Button tornado craziness"
         />
         <p class="slider-hint">Giggle breeze ↔ Sock-blowing mayhem</p>
