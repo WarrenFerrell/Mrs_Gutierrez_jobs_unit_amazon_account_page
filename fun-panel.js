@@ -11,7 +11,8 @@
 
   const ACTION_MODULES = [
     { key: "rainbow", src: "./panel-actions/rainbow-action.js" },
-    { key: "buttons", src: "./panel-actions/button-tornado-action.js" },
+    { key: "gravity", src: "./panel-actions/button-tornado-action.js" },
+    { key: "random", src: "./panel-actions/button-tornado-action.js" },
     { key: "invert", src: "./panel-actions/invert-action.js" },
     { key: "wiggle", src: "./panel-actions/wiggle-action.js" },
     { key: "confetti", src: "./panel-actions/confetti-action.js" },

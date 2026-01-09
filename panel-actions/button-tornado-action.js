@@ -48,17 +48,19 @@
   `);
 
   buttonHandlers.initializeTornadoControls = initializeTornadoControls;
+  register("gravity", createGravityTornadoAction);
+  register("random", createRandomTornadoAction);
 
   function register(key, factory) {
     window.CrazyPanelActionFactories = window.CrazyPanelActionFactories || {};
     window.CrazyPanelActionFactories[key] = factory;
   }
 
-  function createButtonTornadoAction(shared) {
+  function createGravityTornadoAction(shared) {
     const { utils, state } = shared;
     const randomBetweenFn = utils.randomBetween || randomBetween;
 
-    return function handleButtonTornado(button, externalState) {
+    return function handleGravityTornado(button, externalState) {
       const cards = utils.getAllCards();
       if (!cards.length) {
         launchConfettiFallback();
@@ -66,18 +68,47 @@
       }
 
       const runtime = ensureTornadoRuntime(externalState || state);
-      runtime.button = button;
       runtime.randomBetween = randomBetweenFn;
 
-      if (runtime.active) {
+      if (runtime.active && runtime.mode === "gravity") {
         stopTornado(runtime);
         button.classList.remove("is-on");
         return;
       }
 
-      cards.forEach((card) => card.classList.add("crazy-card-tornado"));
-      button.classList.add("is-on");
-      startTornado(runtime, cards);
+      if (runtime.active) {
+        stopTornado(runtime);
+      }
+
+      startGravityMode(runtime, button, cards);
+    };
+  }
+
+  function createRandomTornadoAction(shared) {
+    const { utils, state } = shared;
+    const randomBetweenFn = utils.randomBetween || randomBetween;
+
+    return function handleRandomTornado(button, externalState) {
+      const cards = utils.getAllCards();
+      if (!cards.length) {
+        launchConfettiFallback();
+        return;
+      }
+
+      const runtime = ensureTornadoRuntime(externalState || state);
+      runtime.randomBetween = randomBetweenFn;
+
+      if (runtime.active && runtime.mode === "random") {
+        stopTornado(runtime);
+        button.classList.remove("is-on");
+        return;
+      }
+
+      if (runtime.active) {
+        stopTornado(runtime);
+      }
+
+      startRandomMode(runtime, button, cards);
     };
   }
 
@@ -133,8 +164,13 @@
     return state.buttonTornadoRuntime;
   }
 
-  function startTornado(runtime, cards) {
+  function startGravityMode(runtime, button, cards) {
     runtime.active = true;
+    runtime.mode = "gravity";
+    runtime.button = button;
+    if (button) {
+      button.classList.add("is-on");
+    }
     const viewportWidth = window.innerWidth || document.documentElement.clientWidth || 1200;
     const viewportHeight = window.innerHeight || document.documentElement.clientHeight || 800;
     const viewportCenterX = viewportWidth / 2;
@@ -143,6 +179,8 @@
     runtime.masses = buildMasses(viewportCenterX, viewportCenterY, viewportHeight);
 
     const baseIntensity = getNormalizedIntensity(runtime.stateRef);
+
+    cards.forEach((card) => card.classList.add("crazy-card-tornado"));
 
     runtime.cards = cards.map((card) => {
       const rect = card.getBoundingClientRect();
@@ -192,8 +230,36 @@
     });
 
     runtime.lastTimestamp = null;
-    const step = (timestamp) => animateCards(runtime, timestamp);
-    runtime.rafId = window.requestAnimationFrame(step);
+    runtime.rafId = window.requestAnimationFrame((ts) => runAnimationFrame(runtime, ts));
+  }
+
+  function startRandomMode(runtime, button, cards) {
+    runtime.active = true;
+    runtime.mode = "random";
+    runtime.button = button;
+    if (button) {
+      button.classList.add("is-on");
+    }
+    const baseIntensity = getNormalizedIntensity(runtime.stateRef);
+    cards.forEach((card) => card.classList.add("crazy-card-tornado"));
+
+    runtime.cards = cards.map((card) => {
+      const baseSpeed =
+        runtime.randomBetween(
+          TORNADO_CONFIG.initialSpeedMin,
+          TORNADO_CONFIG.initialSpeedMax * (0.5 + baseIntensity * 1.6)
+        ) * (0.8 + Math.random() * 0.4);
+      const angle = runtime.randomBetween(0, Math.PI * 2);
+      return {
+        el: card,
+        baseTransform: card.style.transform || "",
+        position: { x: 0, y: 0 },
+        velocity: { x: Math.cos(angle) * baseSpeed, y: Math.sin(angle) * baseSpeed },
+        jitterPhase: runtime.randomBetween(0, Math.PI * 2),
+      };
+    });
+    runtime.lastTimestamp = null;
+    runtime.rafId = window.requestAnimationFrame((ts) => runAnimationFrame(runtime, ts));
   }
 
   function stopTornado(runtime) {
@@ -213,9 +279,23 @@
     if (runtime.button) {
       runtime.button.classList.remove("is-on");
     }
+    runtime.button = null;
+    runtime.mode = null;
+    runtime.masses = null;
   }
 
-  function animateCards(runtime, timestamp) {
+  function runAnimationFrame(runtime, timestamp) {
+    if (!runtime.active) {
+      return;
+    }
+    if (runtime.mode === "gravity") {
+      animateGravity(runtime, timestamp);
+    } else if (runtime.mode === "random") {
+      animateRandom(runtime, timestamp);
+    }
+  }
+
+  function animateGravity(runtime, timestamp) {
     if (!runtime.active) {
       return;
     }
@@ -291,7 +371,61 @@
       }
     });
 
-    runtime.rafId = window.requestAnimationFrame((nextTs) => animateCards(runtime, nextTs));
+    runtime.rafId = window.requestAnimationFrame((nextTs) => runAnimationFrame(runtime, nextTs));
+  }
+
+  function animateRandom(runtime, timestamp) {
+    if (!runtime.active) {
+      return;
+    }
+
+    const intensity = getNormalizedIntensity(runtime.stateRef);
+    const dtMs = runtime.lastTimestamp ? Math.max(4, Math.min(100, timestamp - runtime.lastTimestamp)) : 16;
+    runtime.lastTimestamp = timestamp;
+    const dtSeconds = Math.min(TORNADO_CONFIG.maxDelta, dtMs / 1000);
+    const frameScale = Math.min(1.2, dtSeconds * 60 || 1);
+
+    const jitterMagnitude = (2 + intensity * 35) * (Math.PI / 180); // radians
+    const driftLimit = 90 + intensity * 780;
+    const friction = Math.max(0.9, 0.994 - intensity * 0.012);
+
+    runtime.cards.forEach((cardData) => {
+      cardData.jitterPhase += (0.25 + intensity * 0.9) * frameScale;
+      const currentAngle = Math.atan2(cardData.velocity.y, cardData.velocity.x);
+      const anglePerturb =
+        runtime.randomBetween(-0.5, 0.5) * jitterMagnitude +
+        Math.sin(cardData.jitterPhase) * jitterMagnitude * 0.45;
+      const baseSpeed = Math.hypot(cardData.velocity.x, cardData.velocity.y);
+      const desiredSpeed =
+        runtime.randomBetween(
+          TORNADO_CONFIG.initialSpeedMin * (1.6 + intensity * 1.7),
+          TORNADO_CONFIG.initialSpeedMax * (2.5 + intensity * 4.5)
+        ) * (0.78 + Math.random() * 0.45);
+      const blendedSpeed = baseSpeed * 0.4 + desiredSpeed * 0.6;
+      const newAngle = currentAngle + anglePerturb;
+      cardData.velocity.x = Math.cos(newAngle) * blendedSpeed;
+      cardData.velocity.y = Math.sin(newAngle) * blendedSpeed;
+
+      cardData.velocity.x *= friction;
+      cardData.velocity.y *= friction;
+
+      cardData.position.x += cardData.velocity.x * frameScale;
+      cardData.position.y += cardData.velocity.y * frameScale;
+
+      const distance = Math.hypot(cardData.position.x, cardData.position.y);
+      if (distance > driftLimit) {
+        const scale = driftLimit / distance;
+        cardData.position.x *= scale;
+        cardData.position.y *= scale;
+        cardData.velocity.x *= 0.5;
+        cardData.velocity.y *= 0.5;
+      }
+
+      const baseTransform = cardData.baseTransform ? `${cardData.baseTransform} ` : "";
+      cardData.el.style.transform = `${baseTransform}translate3d(${cardData.position.x}px, ${cardData.position.y}px, 0)`;
+    });
+
+    runtime.rafId = window.requestAnimationFrame((nextTs) => runAnimationFrame(runtime, nextTs));
   }
 
   function retargetHome(cardData, runtime) {

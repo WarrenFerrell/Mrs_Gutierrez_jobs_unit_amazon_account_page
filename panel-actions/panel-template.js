@@ -149,8 +149,9 @@
         <p class="slider-hint">Simple ↔ Ultra vibrant</p>
       </div>
 
-      <div class="panel-section">
-        <button type="button" data-action="buttons">🪄 Button Tornado</button>
+      <div class="panel-section panel-section--tornado-buttons">
+        <button type="button" data-action="gravity" class="tornado-button">🪄 Gravity Tornado</button>
+        <button type="button" data-action="random" class="tornado-button tornado-button--secondary">🎲 Random Tornado</button>
       </div>
 
       <div class="panel-section panel-section--tornado">
@@ -329,6 +330,21 @@
         display: flex;
         flex-direction: column;
         gap: 0.4rem;
+      }
+
+      #${constants.PANEL_ID} .panel-section--tornado-buttons {
+        flex-direction: row;
+        flex-wrap: wrap;
+        gap: 0.4rem;
+      }
+
+      #${constants.PANEL_ID} .tornado-button {
+        flex: 1 1 48%;
+        min-width: 0;
+      }
+
+      #${constants.PANEL_ID} .tornado-button--secondary {
+        background: rgba(0, 0, 0, 0.28);
       }
 
       #${constants.PANEL_ID} .panel-section--tornado {
