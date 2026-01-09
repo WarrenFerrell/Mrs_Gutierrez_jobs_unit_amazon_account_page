@@ -1,6 +1,9 @@
 "use strict";
 
 (function () {
+  const MAX_RAINBOW_COLORS = 12;
+  const MIN_RAINBOW_COLORS = 3;
+
   registerStyleChunk(`
     .crazy-rainbow-card {
       background: linear-gradient(130deg, #ffafbd, #ffc3a0, #a1c4fd, #c2ffd8);
@@ -54,14 +57,19 @@
 
     function updateCardGradients() {
       const cards = utils.getAllCards();
-      const colorCount = state.rainbowColorCount || 3;
+      const colorCount = state.rainbowColorCount || MIN_RAINBOW_COLORS;
       const viewportWidth = window.innerWidth;
+      const intensity = Math.min(
+        1,
+        Math.max(0, (colorCount - MIN_RAINBOW_COLORS) / (MAX_RAINBOW_COLORS - MIN_RAINBOW_COLORS))
+      );
+      const solidThreshold = Math.max(0, 0.05 - intensity * 0.05);
 
       cards.forEach((card) => {
         const rect = card.getBoundingClientRect();
         const positionRatio = getCardPositionRatio(card);
         
-        if (positionRatio < 0.05) {
+        if (positionRatio < solidThreshold) {
           // Far left (0-5%): solid color
           const solidColor = utils.randomColor();
           card.style.background = solidColor;
@@ -70,22 +78,28 @@
           card.style.backgroundPosition = '';
           card.style.backgroundRepeat = '';
         } else {
-          // Create rainbow gradient that spans the whole screen
-          // More colors and more vibrant on the right side
-          const effectiveColorCount = Math.max(3, Math.floor(3 + positionRatio * (colorCount - 3)));
-          const colors = Array.from({ length: effectiveColorCount }, () => utils.randomColor());
+          // Gradually increase color complexity and localization with slider intensity
+          const positionBoost = 0.35 + positionRatio * 0.65;
+          const intensityBoost = 0.5 + intensity * 0.5;
+          const targetColors = Math.max(
+            MIN_RAINBOW_COLORS,
+            Math.round(colorCount * positionBoost * intensityBoost)
+          );
+          const colors = Array.from({ length: targetColors }, () => utils.randomColor());
           
           const stops = colors.map((color, i) => {
-            const percent = (i / (effectiveColorCount - 1)) * 100;
+            const percent = (i / (colors.length - 1 || 1)) * 100;
             return `${color} ${percent}%`;
           }).join(', ');
           
-          // Create a gradient that spans the entire viewport width
-          // The gradient starts at the left edge of the viewport (0) and goes to the right edge
-          // Position the background so the card shows the correct portion of this full-screen gradient
+          // Blend from full-screen gradients to card-local rainbows as intensity grows
+          const gradientWidth =
+            viewportWidth * (1 - intensity) + Math.max(rect.width, 1) * intensity;
+          const gradientOffset = -rect.left * (1 - intensity);
+
           card.style.background = `linear-gradient(to right, ${stops})`;
-          card.style.backgroundSize = `${viewportWidth}px 100%`;
-          card.style.backgroundPosition = `${-rect.left}px 0`;
+          card.style.backgroundSize = `${gradientWidth}px 100%`;
+          card.style.backgroundPosition = `${gradientOffset}px 0`;
           card.style.backgroundRepeat = 'no-repeat';
         }
       });
@@ -93,7 +107,7 @@
 
     function updateRainbowGradient() {
       // Update body background (keep for compatibility)
-      const colorCount = state.rainbowColorCount || 3;
+      const colorCount = state.rainbowColorCount || MIN_RAINBOW_COLORS;
       const colors = Array.from({ length: colorCount }, () => utils.randomColor());
       const stops = colors.map((color, i) => {
         const percent = (i / (colorCount - 1)) * 100;
@@ -193,7 +207,10 @@
       if (!Number.isFinite(numeric)) {
         return;
       }
-      state.rainbowColorCount = Math.min(12, Math.max(3, Math.round(numeric)));
+      state.rainbowColorCount = Math.min(
+        MAX_RAINBOW_COLORS,
+        Math.max(MIN_RAINBOW_COLORS, Math.round(numeric))
+      );
       // If rainbow is active, update immediately with new color count
       if (state.rainbowTimer) {
         const isActive = body().style.backgroundImage && body().style.backgroundImage !== original.background;

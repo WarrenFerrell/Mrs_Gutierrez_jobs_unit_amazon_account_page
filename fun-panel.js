@@ -25,7 +25,7 @@
     rainbowTimer: null,
     wiggleOn: false,
     panelOpen: true,
-    tornadoIntensity: 60,
+    tornadoIntensity: 45,
     rainbowSpeed: 800,
     rainbowColorCount: 3,
   };
