@@ -6,6 +6,8 @@
   const PANEL_WIDTH = 280;
   const RAINBOW_INTERVAL_MS = 800;
   const SUPPORT_SCRIPTS = [{ key: "panel", src: "./panel-actions/panel-template.js" }];
+  const RAINBOW_SAFE_SPEED_MS = 1050;
+  const RAINBOW_DEFAULT_SPEED_MS = 2000;
 
   const ACTION_MODULES = [
     { key: "rainbow", src: "./panel-actions/rainbow-action.js" },
@@ -25,9 +27,10 @@
     rainbowTimer: null,
     wiggleOn: false,
     panelOpen: true,
-    tornadoIntensity: 45,
-    rainbowSpeed: 800,
+    tornadoIntensity: 15,
+    rainbowSpeed: RAINBOW_DEFAULT_SPEED_MS,
     rainbowColorCount: 3,
+    rainbowSpeedUnlocked: false,
   };
   const actionHandlers = {};
   const assets = {
@@ -72,6 +75,7 @@
           onZoomChange: handleZoomChange,
           onRainbowSpeedChange: handleRainbowSpeedChange,
           onRainbowColorCountChange: handleRainbowColorCountChange,
+          onRainbowSpeedUnlockToggle: handleRainbowSpeedUnlockToggle,
         });
         document.body.appendChild(panel);
         initializeButtonActionExtras();
@@ -160,6 +164,21 @@
     const rainbowHandlers = window.CrazyPanelRainbowHandlers;
     if (rainbowHandlers && typeof rainbowHandlers.handleColorCountChange === "function") {
       rainbowHandlers.handleColorCountChange(shared, value);
+    }
+  }
+
+  function handleRainbowSpeedUnlockToggle(isUnlocked) {
+    const unlocked = Boolean(isUnlocked);
+    if (state.rainbowSpeedUnlocked === unlocked) {
+      return;
+    }
+    state.rainbowSpeedUnlocked = unlocked;
+    if (!unlocked) {
+      const safeSpeed = Math.max(state.rainbowSpeed || RAINBOW_SAFE_SPEED_MS, RAINBOW_SAFE_SPEED_MS);
+      if (safeSpeed !== state.rainbowSpeed) {
+        state.rainbowSpeed = safeSpeed;
+      }
+      handleRainbowSpeedChange(safeSpeed);
     }
   }
 

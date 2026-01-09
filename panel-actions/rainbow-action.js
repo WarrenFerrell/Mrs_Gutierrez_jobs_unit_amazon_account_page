@@ -3,6 +3,9 @@
 (function () {
   const MAX_RAINBOW_COLORS = 12;
   const MIN_RAINBOW_COLORS = 3;
+  const MAX_RAINBOW_SPEED_MS = 2000;
+  const MIN_RAINBOW_SPEED_MS = 100;
+  const LOCKED_MIN_SPEED_MS = 1050;
 
   registerStyleChunk(`
     .crazy-rainbow-card {
@@ -186,7 +189,9 @@
       if (!Number.isFinite(numeric)) {
         return;
       }
-      state.rainbowSpeed = Math.min(2000, Math.max(100, numeric));
+      const minAllowed = state.rainbowSpeedUnlocked ? MIN_RAINBOW_SPEED_MS : LOCKED_MIN_SPEED_MS;
+      const clamped = Math.min(MAX_RAINBOW_SPEED_MS, Math.max(minAllowed, numeric));
+      state.rainbowSpeed = clamped;
       // If rainbow is active, restart the timer with new speed
       if (state.rainbowTimer) {
         const isActive = body().style.backgroundImage && body().style.backgroundImage !== original.background;

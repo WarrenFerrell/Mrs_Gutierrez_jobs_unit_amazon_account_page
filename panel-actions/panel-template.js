@@ -2,10 +2,19 @@
 
 (function () {
   const assets = window.CrazyPanelAssets = window.CrazyPanelAssets || {};
+  const CRAZY_SPEED_LOCKED_MAX = 1050;
+  const CRAZY_SPEED_UNLOCKED_MAX = 2000;
   registerStyleChunk(buildBaseStyles());
 
   function createPanel(options) {
-    const { shared, onAction, onZoomChange, onRainbowSpeedChange, onRainbowColorCountChange } = options;
+    const {
+      shared,
+      onAction,
+      onZoomChange,
+      onRainbowSpeedChange,
+      onRainbowColorCountChange,
+      onRainbowSpeedUnlockToggle,
+    } = options;
     const { constants } = shared;
     const panel = document.createElement("aside");
     panel.id = constants.PANEL_ID;
@@ -21,18 +30,21 @@
     }
 
     const rainbowSpeedSlider = panel.querySelector("#crazy-rainbow-speed-slider");
+    const unlockButton = panel.querySelector("#crazy-speed-unlock-btn");
+    const safetyToggle = panel.querySelector("#crazy-safety-menu-toggle");
+    const safetyPanel = panel.querySelector("#crazy-safety-menu-panel");
+    const speedState = shared && shared.state ? shared.state : {};
+    let crazySpeedUnlocked = Boolean(speedState.rainbowSpeedUnlocked);
     if (rainbowSpeedSlider && typeof onRainbowSpeedChange === "function") {
       const initialSpeed = getInitialRainbowSpeed(shared);
       // Invert for display: speed value 800ms -> slider value 1300 (which maps back to 800ms)
       rainbowSpeedSlider.value = 2100 - initialSpeed;
       rainbowSpeedSlider.addEventListener("input", (event) => {
-        const sliderValue = clampRainbowSpeed(event.target.value);
-        // Invert: slider value -> speed value
-        // Slider: 100 (left) -> speed 2000ms (slow), 2000 (right) -> speed 100ms (fast)
-        // So: speed = 2100 - sliderValue
-        const speed = 2100 - sliderValue;
+        const sliderValue = applySpeedSliderLimit(clampRainbowSpeed(event.target.value));
+        const speed = sliderValueToSpeed(sliderValue);
         onRainbowSpeedChange(speed);
       });
+      applySpeedLockState();
     }
 
     const rainbowColorCountSlider = panel.querySelector("#crazy-rainbow-color-count-slider");
@@ -42,6 +54,52 @@
       rainbowColorCountSlider.addEventListener("input", (event) => {
         const value = clampRainbowColorCount(event.target.value);
         onRainbowColorCountChange(value);
+      });
+    }
+
+    function sliderValueToSpeed(value) {
+      return 2100 - Number(value);
+    }
+
+    function applySpeedSliderLimit(value) {
+      const max = crazySpeedUnlocked ? CRAZY_SPEED_UNLOCKED_MAX : CRAZY_SPEED_LOCKED_MAX;
+      const numericValue = Number(value);
+      if (Number.isNaN(numericValue)) {
+        return max;
+      }
+      return Math.min(max, numericValue);
+    }
+
+    function applySpeedLockState() {
+      if (rainbowSpeedSlider) {
+        const maxValue = crazySpeedUnlocked ? CRAZY_SPEED_UNLOCKED_MAX : CRAZY_SPEED_LOCKED_MAX;
+        rainbowSpeedSlider.max = String(maxValue);
+        if (Number(rainbowSpeedSlider.value) > maxValue) {
+          rainbowSpeedSlider.value = String(maxValue);
+          const enforcedSpeed = sliderValueToSpeed(maxValue);
+          onRainbowSpeedChange(enforcedSpeed);
+        }
+      }
+      if (unlockButton) {
+        unlockButton.classList.toggle("is-on", crazySpeedUnlocked);
+        unlockButton.setAttribute("aria-pressed", String(crazySpeedUnlocked));
+        unlockButton.textContent = crazySpeedUnlocked ? "Lock Crazy Speed" : "Unlock Crazy Speed";
+      }
+    }
+
+    if (unlockButton && typeof onRainbowSpeedUnlockToggle === "function") {
+      unlockButton.addEventListener("click", () => {
+        crazySpeedUnlocked = !crazySpeedUnlocked;
+        onRainbowSpeedUnlockToggle(crazySpeedUnlocked);
+        applySpeedLockState();
+      });
+    }
+
+    if (safetyToggle && safetyPanel) {
+      safetyToggle.addEventListener("click", () => {
+        const isOpen = safetyToggle.getAttribute("aria-expanded") === "true";
+        safetyToggle.setAttribute("aria-expanded", String(!isOpen));
+        safetyPanel.classList.toggle("is-open", !isOpen);
       });
     }
 
@@ -68,7 +126,7 @@
           min="100"
           max="2000"
           step="50"
-          value="1300"
+          value="100"
           aria-label="Rainbow speed"
         />
         <p class="slider-hint">Slow motion ↔ Lightning fast</p>
@@ -107,7 +165,7 @@
           min="0"
           max="180"
           step="3"
-          value="45"
+          value="15"
           aria-label="Button tornado craziness"
         />
         <p class="slider-hint">Giggle breeze ↔ Sock-blowing mayhem</p>
@@ -127,6 +185,25 @@
         <button type="button" data-action="confetti">🎉 Confetti Boom</button>
         <button type="button" data-action="reset" class="ghost">🧹 Calm Everything</button>
       </div>
+
+      <div class="safety-menu">
+        <button
+          type="button"
+          id="crazy-safety-menu-toggle"
+          class="safety-menu__toggle"
+          aria-haspopup="true"
+          aria-expanded="false"
+          aria-controls="crazy-safety-menu-panel"
+        >
+          ☰ Safety Menu
+        </button>
+        <div id="crazy-safety-menu-panel" class="safety-menu__panel" role="region" aria-label="Safety controls">
+          <p class="safety-menu__label">Rainbow speed needs an adult unlock.</p>
+          <button type="button" id="crazy-speed-unlock-btn" class="ghost" aria-pressed="false">
+            Unlock Crazy Speed
+          </button>
+        </div>
+      </div>
     `;
   }
 
@@ -135,7 +212,7 @@
   function clampRainbowSpeed(value) {
     const numeric = Number(value);
     if (!Number.isFinite(numeric)) {
-      return 800;
+      return 2000;
     }
     // Clamp to slider range (100 to 2000)
     return Math.min(2000, Math.max(100, numeric));
@@ -143,9 +220,9 @@
 
   function getInitialRainbowSpeed(shared) {
     if (!shared || !shared.state) {
-      return 800;
+      return 2000;
     }
-    return shared.state.rainbowSpeed ?? 800;
+    return shared.state.rainbowSpeed ?? 2000;
   }
 
   function clampRainbowColorCount(value) {
@@ -296,6 +373,61 @@
 
       #${constants.PANEL_ID} .ghost {
         background: rgba(0, 0, 0, 0.45);
+      }
+
+      #${constants.PANEL_ID} .safety-menu {
+        margin-top: auto;
+        position: relative;
+        padding-top: 0.5rem;
+      }
+
+      #${constants.PANEL_ID} .safety-menu__toggle {
+        width: 100%;
+        display: flex;
+        justify-content: center;
+        gap: 0.4rem;
+        align-items: center;
+        border: none;
+        border-radius: 999px;
+        background: rgba(0,0,0,0.35);
+        color: #fff;
+        font-weight: 700;
+        padding: 0.5rem 0.75rem;
+        cursor: pointer;
+        box-shadow: 0 6px 16px rgba(0,0,0,0.35);
+      }
+
+      #${constants.PANEL_ID} .safety-menu__toggle:focus-visible {
+        outline: 3px solid #fff;
+        outline-offset: 2px;
+      }
+
+      #${constants.PANEL_ID} .safety-menu__panel {
+        position: absolute;
+        right: 0;
+        bottom: calc(100% + 0.5rem);
+        width: calc(100% - 0.5rem);
+        background: rgba(0,0,0,0.6);
+        border-radius: 1rem;
+        padding: 0.8rem;
+        box-shadow: 0 10px 24px rgba(0,0,0,0.45);
+        opacity: 0;
+        pointer-events: none;
+        transform: translateY(8px);
+        transition: opacity 0.2s ease, transform 0.2s ease;
+      }
+
+      #${constants.PANEL_ID} .safety-menu__panel.is-open {
+        opacity: 1;
+        pointer-events: auto;
+        transform: translateY(0);
+      }
+
+      #${constants.PANEL_ID} .safety-menu__label {
+        margin: 0 0 0.5rem;
+        font-size: 0.75rem;
+        line-height: 1.2;
+        color: rgba(255,255,255,0.9);
       }
 
       #${constants.PANEL_TOGGLE_ID} {
