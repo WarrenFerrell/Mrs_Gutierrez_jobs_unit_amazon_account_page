@@ -149,30 +149,6 @@
         to   { transform: rotate(1deg) translateX(1px); }
       }
 
-      .flying-fun {
-        position: fixed;
-        padding: 0.35rem 0.8rem;
-        border-radius: 999px;
-        background: #fff6;
-        color: #2c1b5a;
-        font-weight: 700;
-        pointer-events: none;
-        animation: fly-around 8s linear forwards;
-        backdrop-filter: blur(4px);
-        box-shadow: 0 4px 12px rgba(0,0,0,0.25);
-      }
-
-      @keyframes fly-around {
-        from {
-          transform: translate(var(--start-x), var(--start-y)) scale(0.8);
-          opacity: 0.85;
-        }
-        to {
-          transform: translate(var(--end-x), var(--end-y)) scale(1.25);
-          opacity: 0;
-        }
-      }
-
       .confetti-dot {
         position: fixed;
         width: 12px;
@@ -232,6 +208,40 @@
 
       body.crazy-panel-offset #${PANEL_TOGGLE_ID} {
         left: calc(var(--crazy-panel-width) + 1rem);
+      }
+
+      .crazy-card-chaos {
+        animation: card-chaos var(--chaos-duration, 1.6s) ease-in-out infinite alternate;
+        position: relative;
+        z-index: 2;
+        box-shadow: 0 12px 30px rgba(0, 0, 0, 0.25);
+      }
+
+      @keyframes card-chaos {
+        from {
+          transform: translate(0, 0) rotate(0deg) scale(1);
+        }
+        to {
+          transform: translate(var(--chaos-x, 12px), var(--chaos-y, -12px)) rotate(var(--chaos-rotate, 3deg)) scale(1.03);
+        }
+      }
+
+      .crazy-rainbow-card {
+        background: linear-gradient(130deg, #ffafbd, #ffc3a0, #a1c4fd, #c2ffd8);
+        background-size: 200% 200%;
+        animation: rainbow-card-flow 3.5s ease-in-out infinite;
+        color: #1f174d;
+        border-color: rgba(255, 255, 255, 0.8) !important;
+      }
+
+      .crazy-rainbow-card .a-color-secondary {
+        color: rgba(31, 23, 77, 0.8) !important;
+      }
+
+      @keyframes rainbow-card-flow {
+        0% { background-position: 0% 50%; }
+        50% { background-position: 100% 50%; }
+        100% { background-position: 0% 50%; }
       }
     `;
 
@@ -333,33 +343,44 @@
         const gradient = `linear-gradient(120deg, ${randomColor()} 0%, ${randomColor()} 50%, ${randomColor()} 100%)`;
         document.body.style.backgroundImage = gradient;
       }, RAINBOW_INTERVAL_MS);
-    } else if (state.rainbowTimer) {
-      window.clearInterval(state.rainbowTimer);
-      state.rainbowTimer = null;
+      setCardRainbow(true);
+    } else {
+      if (state.rainbowTimer) {
+        window.clearInterval(state.rainbowTimer);
+        state.rainbowTimer = null;
+      }
       document.body.style.backgroundImage = original.background;
       document.body.style.backgroundColor = original.backgroundColor;
+      setCardRainbow(false);
     }
   }
 
   function launchButtonStorm() {
-    const words = ["Wow!", "Zap!", "Code!", "Boom!", "Go!", "Yay!", "LOL!", "Pop!", "Hi!", "Go Go!", "Yes!", "Woosh!"];
-    const count = 12;
-
-    for (let i = 0; i < count; i += 1) {
-      const label = words[Math.floor(Math.random() * words.length)];
-      const flyer = document.createElement("div");
-      flyer.className = "flying-fun";
-      flyer.textContent = label;
-      flyer.style.setProperty("--start-x", `${randomBetween(-20, 20)}vw`);
-      flyer.style.setProperty("--start-y", `${randomBetween(-10, 10)}vh`);
-      flyer.style.setProperty("--end-x", `${randomBetween(-30, 30)}vw`);
-      flyer.style.setProperty("--end-y", `${randomBetween(40, 110)}vh`);
-      flyer.style.left = `${randomBetween(20, 75)}vw`;
-      flyer.style.top = `${randomBetween(5, 30)}vh`;
-      flyer.style.background = randomPastel();
-      document.body.appendChild(flyer);
-      window.setTimeout(() => flyer.remove(), 8200);
+    const cards = Array.from(document.querySelectorAll(".ya-card--rich"));
+    if (!cards.length) {
+      sprinkleConfetti();
+      return;
     }
+
+    cards.forEach((card, index) => {
+      card.classList.add("crazy-card-chaos");
+      card.style.setProperty("--chaos-x", `${randomBetween(-35, 35)}px`);
+      card.style.setProperty("--chaos-y", `${randomBetween(-25, 25)}px`);
+      card.style.setProperty("--chaos-rotate", `${randomBetween(-4, 4)}deg`);
+      card.style.setProperty("--chaos-duration", `${1.2 + Math.random()}s`);
+      card.style.zIndex = 2 + (cards.length - index);
+    });
+
+    window.setTimeout(() => {
+      cards.forEach((card) => {
+        card.classList.remove("crazy-card-chaos");
+        card.style.removeProperty("--chaos-x");
+        card.style.removeProperty("--chaos-y");
+        card.style.removeProperty("--chaos-rotate");
+        card.style.removeProperty("--chaos-duration");
+        card.style.removeProperty("z-index");
+      });
+    }, 4500);
   }
 
   function sprinkleConfetti() {
@@ -394,6 +415,7 @@
     }
 
     document.querySelectorAll(".flying-fun, .confetti-dot").forEach((el) => el.remove());
+    setCardRainbow(false);
   }
 
   function setPanelVisibility(open) {
@@ -419,13 +441,15 @@
     return `hsl(${hue}, 85%, 65%)`;
   }
 
-  function randomPastel() {
-    const hue = Math.floor(Math.random() * 360);
-    return `hsla(${hue}, 80%, 75%, 0.8)`;
-  }
-
   function randomBetween(min, max) {
     return Math.random() * (max - min) + min;
+  }
+
+  function setCardRainbow(isRainbow) {
+    const cards = document.querySelectorAll(".ya-card--rich");
+    cards.forEach((card) => {
+      card.classList.toggle("crazy-rainbow-card", isRainbow);
+    });
   }
 
   if (document.readyState === "loading") {
