@@ -1,33 +1,24 @@
 "use strict";
 
 (function () {
+  const TORNADO_SLIDER_MAX = 180;
+  const MOOD_RANGES = [
+    { max: 20, label: "Breezy" },
+    { max: 40, label: "Gusty" },
+    { max: 60, label: "Spicy" },
+    { max: 90, label: "Wild" },
+    { max: 120, label: "Rowdy" },
+    { max: 150, label: "Bonkers" },
+    { max: TORNADO_SLIDER_MAX, label: "Mayhem" },
+  ];
   const buttonHandlers = window.CrazyPanelButtonHandlers = window.CrazyPanelButtonHandlers || {};
 
   registerStyleChunk(`
-    .crazy-card-wander {
+    .crazy-card-tornado {
       position: relative;
-      animation: crazy-card-wander var(--wander-duration, 4s) ease-in-out infinite;
       will-change: transform;
-      z-index: 2;
-      box-shadow: 0 12px 30px rgba(0, 0, 0, 0.25);
-    }
-
-    @keyframes crazy-card-wander {
-      0% {
-        transform: translate(var(--wander-x0, 0px), var(--wander-y0, 0px)) scale(var(--wander-scale, 1));
-      }
-      25% {
-        transform: translate(var(--wander-x1, 0px), var(--wander-y1, 0px)) scale(var(--wander-scale, 1.02));
-      }
-      50% {
-        transform: translate(var(--wander-x2, 0px), var(--wander-y2, 0px)) scale(var(--wander-scale, 1.04));
-      }
-      75% {
-        transform: translate(var(--wander-x3, 0px), var(--wander-y3, 0px)) scale(var(--wander-scale, 1.02));
-      }
-      100% {
-        transform: translate(var(--wander-x4, 0px), var(--wander-y4, 0px)) scale(var(--wander-scale, 1));
-      }
+      box-shadow: 0 18px 32px rgba(0, 0, 0, 0.28);
+      transition: box-shadow 0.2s ease;
     }
   `);
 
@@ -40,6 +31,7 @@
 
   function createButtonTornadoAction(shared) {
     const { utils, state } = shared;
+    const randomBetweenFn = utils.randomBetween || randomBetween;
 
     return function handleButtonTornado(button, externalState) {
       const cards = utils.getAllCards();
@@ -48,41 +40,29 @@
         return;
       }
 
-      const activeState = externalState || state;
-      const intensity = getNormalizedIntensity(activeState);
+      const runtime = ensureTornadoRuntime(externalState || state);
+      runtime.button = button;
+      runtime.randomBetween = randomBetweenFn;
 
-      const maxDrift = 20 + intensity * 160; // how far buttons wander (px)
-      const durationMin = Math.max(1.1, 4.5 - intensity * 3.2);
-      const durationMax = durationMin + 1.5;
+      if (runtime.active) {
+        stopTornado(runtime);
+        button.classList.remove("is-on");
+        return;
+      }
 
-      cards.forEach((card, index) => {
-        const wanderPoints = buildWanderPoints(maxDrift, utils.randomBetween || randomBetween);
-        const wanderDuration = (utils.randomBetween || randomBetween)(durationMin, durationMax);
-        const wanderScale = (0.98 + Math.random() * 0.12).toFixed(3);
-        const delay = (index * 0.08) % 0.8;
-
-        card.classList.add("crazy-card-wander");
-        applyPointVariables(card, wanderPoints);
-        card.style.setProperty("--wander-duration", `${wanderDuration.toFixed(2)}s`);
-        card.style.setProperty("--wander-scale", wanderScale);
-        card.style.animationDelay = `${delay.toFixed(2)}s`;
-        card.style.zIndex = 2 + (cards.length - index);
-      });
-
-      // Clean up after animation completes
-      const cleanupDuration = (durationMax + 0.6) * 1000;
-      window.setTimeout(() => {
-        cards.forEach((card) => {
-          card.classList.remove("crazy-card-wander");
-          removePointVariables(card);
-          card.style.removeProperty("--wander-duration");
-          card.style.removeProperty("--wander-scale");
-          card.style.removeProperty("animation-delay");
-          card.style.removeProperty("z-index");
-        });
-      }, cleanupDuration);
+      cards.forEach((card) => card.classList.add("crazy-card-tornado"));
+      button.classList.add("is-on");
+      startTornado(runtime, cards);
     };
   }
+
+  buttonHandlers.stopTornado = () => {
+    const shared = window.CrazyPanelShared;
+    if (!shared || !shared.state || !shared.state.buttonTornadoRuntime) {
+      return;
+    }
+    stopTornado(shared.state.buttonTornadoRuntime);
+  };
 
   function initializeTornadoControls(shared) {
     const slider = document.getElementById("crazy-tornado-slider");
@@ -98,11 +78,11 @@
 
     const startValue = clampTornadoValue(shared.state.tornadoIntensity);
     slider.value = String(startValue);
-    updateTornadoLabel(label, startValue);
+    updateTornadoLabel(label, startValue, slider);
 
     slider.addEventListener("input", (event) => {
       const value = clampTornadoValue(event.target.value);
-      updateTornadoLabel(label, value);
+      updateTornadoLabel(label, value, slider);
       applyTornadoState(shared.state, value);
     });
   }
@@ -114,53 +94,136 @@
     state.tornadoIntensity = value;
   }
 
-  function buildWanderPoints(maxDistance, randomBetweenFn) {
-    const points = [{ x: 0, y: 0 }];
-    for (let i = 0; i < 3; i += 1) {
-      points.push({
-        x: randomBetweenFn(-maxDistance, maxDistance).toFixed(1),
-        y: randomBetweenFn(-maxDistance, maxDistance).toFixed(1),
-      });
+  function ensureTornadoRuntime(state) {
+    if (!state.buttonTornadoRuntime) {
+      state.buttonTornadoRuntime = {
+        active: false,
+        rafId: null,
+        cards: [],
+        stateRef: state,
+        button: null,
+        randomBetween: randomBetween,
+      };
     }
-    points.push({ x: 0, y: 0 });
-    return points;
+    return state.buttonTornadoRuntime;
   }
 
-  function applyPointVariables(card, points) {
-    points.forEach((point, index) => {
-      card.style.setProperty(`--wander-x${index}`, `${point.x}px`);
-      card.style.setProperty(`--wander-y${index}`, `${point.y}px`);
+  function startTornado(runtime, cards) {
+    runtime.active = true;
+    runtime.cards = cards.map((card) => {
+      const rect = card.getBoundingClientRect();
+      const viewportCenter = (window.innerWidth || document.documentElement.clientWidth || 1200) / 2;
+      const direction = rect.left < viewportCenter ? 1 : -1;
+      return {
+        el: card,
+        baseTransform: card.style.transform || "",
+        direction,
+        progress: 0,
+        chaosX: runtime.randomBetween(0.12, 0.88),
+        chaosY: runtime.randomBetween(0.12, 0.88),
+        rX: runtime.randomBetween(3.72, 3.96),
+        rY: runtime.randomBetween(3.80, 3.99),
+        speed: runtime.randomBetween(0.85, 1.35),
+      };
     });
+
+    const step = () => animateCards(runtime);
+    runtime.rafId = window.requestAnimationFrame(step);
   }
 
-  function removePointVariables(card) {
-    for (let i = 0; i <= 4; i += 1) {
-      card.style.removeProperty(`--wander-x${i}`);
-      card.style.removeProperty(`--wander-y${i}`);
+  function stopTornado(runtime) {
+    if (!runtime.active) {
+      return;
     }
+    runtime.active = false;
+    if (runtime.rafId) {
+      window.cancelAnimationFrame(runtime.rafId);
+      runtime.rafId = null;
+    }
+    runtime.cards.forEach((cardData) => {
+      cardData.el.style.transform = cardData.baseTransform;
+      cardData.el.classList.remove("crazy-card-tornado");
+    });
+    runtime.cards = [];
+    if (runtime.button) {
+      runtime.button.classList.remove("is-on");
+    }
+  }
+
+  function animateCards(runtime) {
+    if (!runtime.active) {
+      return;
+    }
+
+    const intensity = getNormalizedIntensity(runtime.stateRef);
+    const viewportWidth = window.innerWidth || document.documentElement.clientWidth || 1200;
+    const horizontalTravel = viewportWidth * (0.2 + 0.65 * intensity);
+    const verticalRange = 120 + intensity * 260;
+    const chaosTilt = 4 + intensity * 16;
+    const baseStep = 0.001 + intensity * 0.004;
+
+    runtime.cards.forEach((cardData) => {
+      cardData.chaosX = logisticStep(cardData.chaosX, cardData.rX);
+      cardData.chaosY = logisticStep(cardData.chaosY, cardData.rY);
+
+      const speedBoost = (0.35 + cardData.chaosX * 0.65) * cardData.speed;
+      cardData.progress += baseStep * speedBoost;
+
+      if (cardData.progress >= 1) {
+        cardData.progress = 0;
+        cardData.direction *= -1;
+      }
+
+      const eased = easeInOutCubic(cardData.progress);
+      const horizontalOffset = cardData.direction * horizontalTravel * eased;
+      const verticalOffset = (cardData.chaosY - 0.5) * 2 * verticalRange;
+      const rotation = (cardData.chaosX - 0.5) * 2 * chaosTilt;
+
+      const baseTransform = cardData.baseTransform ? `${cardData.baseTransform} ` : "";
+      cardData.el.style.transform = `${baseTransform}translate3d(${horizontalOffset}px, ${verticalOffset}px, 0) rotate(${rotation}deg)`;
+    });
+
+    runtime.rafId = window.requestAnimationFrame(() => animateCards(runtime));
+  }
+
+  function logisticStep(value, r) {
+    const next = r * value * (1 - value);
+    if (next <= 0) return 0.001;
+    if (next >= 1) return 0.999;
+    return next;
+  }
+
+  function easeInOutCubic(t) {
+    return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
   }
 
   function clampTornadoValue(value) {
     const numeric = Number(value);
     if (!Number.isFinite(numeric)) {
-      return 60;
+      return 45;
     }
-    return Math.min(100, Math.max(0, numeric));
+    return Math.min(TORNADO_SLIDER_MAX, Math.max(0, numeric));
   }
 
-  function updateTornadoLabel(labelEl, value) {
+  function updateTornadoLabel(labelEl, value, sliderEl) {
     if (!labelEl) {
       return;
     }
-    labelEl.textContent = describeTornadoMood(value);
+    const mood = describeTornadoMood(value);
+    labelEl.textContent = mood;
+    if (sliderEl) {
+      sliderEl.setAttribute("aria-valuetext", mood);
+    }
   }
 
   function describeTornadoMood(value) {
-    if (value <= 15) return "Breezy";
-    if (value <= 35) return "Spicy";
-    if (value <= 55) return "Wild";
-    if (value <= 75) return "Bonkers";
-    return "Mayhem";
+    const numeric = Number(value);
+    for (let i = 0; i < MOOD_RANGES.length; i += 1) {
+      if (numeric <= MOOD_RANGES[i].max) {
+        return MOOD_RANGES[i].label;
+      }
+    }
+    return MOOD_RANGES[MOOD_RANGES.length - 1].label;
   }
 
   function launchConfettiFallback() {
@@ -183,11 +246,12 @@
   register("buttons", createButtonTornadoAction);
 
   function getNormalizedIntensity(state) {
-    if (!state || typeof state.tornadoIntensity !== "number") {
-      return 0.6;
-    }
-    const clamped = Math.min(100, Math.max(0, state.tornadoIntensity));
-    return clamped / 100;
+    const raw =
+      !state || typeof state.tornadoIntensity !== "number"
+        ? 45
+        : clampTornadoValue(state.tornadoIntensity);
+    const normalized = raw / TORNADO_SLIDER_MAX;
+    return Math.pow(normalized, 1.25);
   }
 
   function randomBetween(min, max) {

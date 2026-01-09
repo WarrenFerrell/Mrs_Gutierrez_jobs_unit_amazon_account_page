@@ -98,16 +98,16 @@
       <div class="panel-section panel-section--tornado">
         <div class="panel-section__header">
           <label for="crazy-tornado-slider">Tornado Craziness</label>
-          <span id="crazy-tornado-label" class="panel-chip">Spicy</span>
+          <span id="crazy-tornado-label" class="panel-chip">Breezy</span>
         </div>
         <input
           id="crazy-tornado-slider"
           class="slider slider--tornado"
           type="range"
           min="0"
-          max="100"
-          step="5"
-          value="60"
+          max="180"
+          step="3"
+          value="45"
           aria-label="Button tornado craziness"
         />
         <p class="slider-hint">Giggle breeze ↔ Sock-blowing mayhem</p>
