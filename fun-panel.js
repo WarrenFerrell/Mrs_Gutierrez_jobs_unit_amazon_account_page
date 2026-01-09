@@ -25,6 +25,9 @@
     rainbowTimer: null,
     wiggleOn: false,
     panelOpen: true,
+    tornadoIntensity: 60,
+    rainbowSpeed: 800,
+    rainbowColorCount: 3,
   };
   const actionHandlers = {};
   const assets = {
@@ -48,6 +51,7 @@
   shared.utils.getAllCards = () => Array.from(document.querySelectorAll(".ya-card--rich"));
   shared.utils.getPanelButtons = () => Array.from(document.querySelectorAll(`#${PANEL_ID} button`));
   shared.utils.handleZoomChange = handleZoomChange;
+  shared.utils.getTornadoIntensity = () => shared.state.tornadoIntensity ?? 60;
 
   window.CrazyPanelShared = shared;
   window.CrazyPanelActionFactories = window.CrazyPanelActionFactories || {};
@@ -66,8 +70,11 @@
           shared,
           onAction: handleAction,
           onZoomChange: handleZoomChange,
+          onRainbowSpeedChange: handleRainbowSpeedChange,
+          onRainbowColorCountChange: handleRainbowColorCountChange,
         });
         document.body.appendChild(panel);
+        initializeButtonActionExtras();
         createToggleButton();
         setPanelVisibility(true);
       })
@@ -97,7 +104,7 @@
     const handler = actionHandlers[action];
 
     if (typeof handler === "function") {
-      handler(button);
+      handler(button, shared.state);
     } else {
       console.warn(`[CrazyPanel] No handler registered for action "${action}"`);
     }
@@ -140,6 +147,20 @@
   function handleZoomChange(value) {
     const delta = Number(value);
     document.documentElement.style.fontSize = `${100 + delta * 8}%`;
+  }
+
+  function handleRainbowSpeedChange(value) {
+    const rainbowHandlers = window.CrazyPanelRainbowHandlers;
+    if (rainbowHandlers && typeof rainbowHandlers.handleSpeedChange === "function") {
+      rainbowHandlers.handleSpeedChange(shared, value);
+    }
+  }
+
+  function handleRainbowColorCountChange(value) {
+    const rainbowHandlers = window.CrazyPanelRainbowHandlers;
+    if (rainbowHandlers && typeof rainbowHandlers.handleColorCountChange === "function") {
+      rainbowHandlers.handleColorCountChange(shared, value);
+    }
   }
 
   function loadScripts(modules) {
@@ -217,6 +238,13 @@
       document.head.appendChild(style);
     }
     style.textContent = chunks.join("\n");
+  }
+
+  function initializeButtonActionExtras() {
+    const handlers = window.CrazyPanelButtonHandlers;
+    if (handlers && typeof handlers.initializeTornadoControls === "function") {
+      handlers.initializeTornadoControls(shared);
+    }
   }
 
   if (document.readyState === "loading") {
