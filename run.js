@@ -7,6 +7,7 @@ const { spawn } = require("child_process");
 
 const ROOT = __dirname;
 const ENTRY_FILE = "Your Account.html";
+const SHUTDOWN_ENDPOINT = "/__close";
 const START_PORT = Number(process.env.PORT || 3000);
 const PORT_SEARCH_SPAN = 20;
 
@@ -30,6 +31,9 @@ const MIME_TYPES = {
   ".download": "application/octet-stream",
 };
 
+let currentServer = null;
+let shuttingDown = false;
+
 const command = (process.argv[2] || "").toLowerCase();
 
 if (command !== "start") {
@@ -39,7 +43,13 @@ if (command !== "start") {
 
 function createServer() {
   return http.createServer((req, res) => {
-    const method = req.method || "GET";
+    const method = (req.method || "GET").toUpperCase();
+
+    let requestPath = decodeURIComponent((req.url || "/").split("?")[0]);
+    if (requestPath === SHUTDOWN_ENDPOINT) {
+      handleShutdownEndpoint(method, res);
+      return;
+    }
 
     if (!["GET", "HEAD"].includes(method)) {
       res.writeHead(405, { "Content-Type": "text/plain" });
@@ -47,7 +57,7 @@ function createServer() {
       return;
     }
 
-    let requestPath = decodeURIComponent((req.url || "/").split("?")[0]);
+    requestPath = requestPath || "/";
     if (requestPath === "/" || requestPath === "") {
       requestPath = `/${ENTRY_FILE}`;
     }
@@ -61,6 +71,18 @@ function createServer() {
 
     deliver(filePath, req, res);
   });
+}
+
+function handleShutdownEndpoint(method, res) {
+  if (method !== "POST") {
+    res.writeHead(405, { "Content-Type": "text/plain" });
+    res.end("Method Not Allowed");
+    return;
+  }
+
+  res.writeHead(204);
+  res.end();
+  setImmediate(() => scheduleShutdown("Browser window closed. Stopping local server."));
 }
 
 function safeResolve(requestPath) {
@@ -162,21 +184,38 @@ function openBrowser(url) {
   child.unref();
 }
 
+function scheduleShutdown(reason = "Shutting down server...") {
+  if (shuttingDown) {
+    return;
+  }
+
+  shuttingDown = true;
+  console.log(`🛑 ${reason}`);
+
+  const exit = () => process.exit(0);
+  if (currentServer) {
+    currentServer.close(exit);
+  } else {
+    exit();
+  }
+}
+
 (async () => {
   try {
     const { server, port } = await startServer();
+    currentServer = server;
     const url = `http://localhost:${port}/`;
     console.log(`🌟 Serving ${ENTRY_FILE} at ${url}`);
     console.log("Press Ctrl+C to stop the server.");
 
     openBrowser(url);
 
-    const cleanup = () => {
-      server.close(() => process.exit(0));
+    const handleSignal = (signal) => {
+      scheduleShutdown(`Received ${signal}. Stopping local server.`);
     };
 
-    process.on("SIGINT", cleanup);
-    process.on("SIGTERM", cleanup);
+    process.on("SIGINT", () => handleSignal("SIGINT"));
+    process.on("SIGTERM", () => handleSignal("SIGTERM"));
   } catch (error) {
     console.error("Unable to start the local server:", error.message);
     process.exit(1);
