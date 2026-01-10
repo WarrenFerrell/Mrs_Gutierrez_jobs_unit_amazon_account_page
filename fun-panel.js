@@ -9,7 +9,7 @@
   const RAINBOW_SAFE_SPEED_MS = 1050;
   const RAINBOW_DEFAULT_SPEED_MS = 2000;
   const CRAZY_TORNADO_CONFIG = {
-    enablePointClickByDefault: true,
+    enablePointClickByDefault: false,
   };
 
   const ACTION_MODULES = [
