@@ -46,6 +46,7 @@
     return function handleConfetti() {
       const viewportWidth = window.innerWidth;
       const viewportHeight = window.innerHeight;
+      blastActiveTornadoCards();
       
       // Create multiple explosion points distributed across the screen
       const explosionCenters = [];
@@ -93,6 +94,40 @@
   }
 
   register("confetti", createConfettiAction);
+
+  function blastActiveTornadoCards() {
+    const shared = window.CrazyPanelShared;
+    const state = shared && shared.state;
+    const runtime = state && state.buttonTornadoRuntime;
+    if (
+      !runtime ||
+      !runtime.active ||
+      !Array.isArray(runtime.cards) ||
+      runtime.cards.length === 0 ||
+      ["gravity", "random", "point"].indexOf(runtime.mode) === -1
+    ) {
+      return false;
+    }
+
+    const sliderMax = 180;
+    const intensity = Math.max(0, Math.min(sliderMax, Number(state.tornadoIntensity) || 0));
+    const normalized = Math.pow(intensity / sliderMax, 0.85);
+    const baseSpeed = 16 + normalized * 70;
+
+    runtime.cards.forEach((card) => {
+      const angle = Math.random() * Math.PI * 2;
+      const speed = baseSpeed * (0.75 + Math.random() * 0.6);
+      card.velocity.x = Math.cos(angle) * speed;
+      card.velocity.y = Math.sin(angle) * speed;
+      card.position.x += card.velocity.x * 0.2;
+      card.position.y += card.velocity.y * 0.2;
+
+      const baseTransform = card.baseTransform ? `${card.baseTransform} ` : "";
+      card.el.style.transform = `${baseTransform}translate3d(${card.position.x}px, ${card.position.y}px, 0)`;
+    });
+
+    return true;
+  }
 
   function registerStyleChunk(css) {
     if (!css) return;
