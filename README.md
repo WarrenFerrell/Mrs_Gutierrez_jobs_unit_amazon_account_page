@@ -1,4 +1,4 @@
-# Mrs Gutierrez Amazon Page
+# Mrs G Amazon Page
 
 Hi! This little project lets you, in a fun way, explore what a software engineer does on a pretend Amazon Your Account page.
 
