@@ -41,6 +41,23 @@
 
       utils.setCardRainbow(false);
       document.querySelectorAll(".confetti-dot").forEach((el) => el.remove());
+
+      const tornadoHandlers = window.CrazyPanelButtonHandlers;
+      if (tornadoHandlers && typeof tornadoHandlers.stopTornado === "function") {
+        tornadoHandlers.stopTornado();
+      }
+
+      const randomHandlers = window.CrazyPanelRandomHandlers;
+      if (randomHandlers) {
+        if (typeof randomHandlers.clearWells === "function") {
+          randomHandlers.clearWells();
+        }
+        if (typeof randomHandlers.setMode === "function") {
+          randomHandlers.setMode("chaos");
+        }
+      } else if (state) {
+        state.randomMode = "chaos";
+      }
     };
   }
 

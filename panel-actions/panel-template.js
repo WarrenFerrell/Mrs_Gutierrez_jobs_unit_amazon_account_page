@@ -103,6 +103,7 @@
       });
     }
 
+
     return panel;
   }
 
@@ -152,6 +153,7 @@
       <div class="panel-section panel-section--tornado-buttons">
         <button type="button" data-action="gravity" class="tornado-button">🪄 Gravity Tornado</button>
         <button type="button" data-action="random" class="tornado-button tornado-button--secondary">🎲 Random Tornado</button>
+        <button type="button" data-action="point" class="tornado-button tornado-button--point">🌀 Point &amp; Click Gravity</button>
       </div>
 
       <div class="panel-section panel-section--tornado">
@@ -339,12 +341,17 @@
       }
 
       #${constants.PANEL_ID} .tornado-button {
-        flex: 1 1 48%;
+        flex: 1 1 32%;
         min-width: 0;
       }
 
       #${constants.PANEL_ID} .tornado-button--secondary {
         background: rgba(0, 0, 0, 0.28);
+      }
+
+      #${constants.PANEL_ID} .tornado-button--point {
+        background: rgba(255, 255, 255, 0.15);
+        border: 2px dashed rgba(255, 255, 255, 0.4);
       }
 
       #${constants.PANEL_ID} .panel-section--tornado {
@@ -445,6 +452,7 @@
         line-height: 1.2;
         color: rgba(255,255,255,0.9);
       }
+
 
       #${constants.PANEL_TOGGLE_ID} {
         position: fixed;

@@ -8,11 +8,15 @@
   const SUPPORT_SCRIPTS = [{ key: "panel", src: "./panel-actions/panel-template.js" }];
   const RAINBOW_SAFE_SPEED_MS = 1050;
   const RAINBOW_DEFAULT_SPEED_MS = 2000;
+  const CRAZY_TORNADO_CONFIG = {
+    enablePointClickByDefault: true,
+  };
 
   const ACTION_MODULES = [
     { key: "rainbow", src: "./panel-actions/rainbow-action.js" },
     { key: "gravity", src: "./panel-actions/button-tornado-action.js" },
     { key: "random", src: "./panel-actions/button-tornado-action.js" },
+    { key: "point", src: "./panel-actions/button-tornado-action.js" },
     { key: "invert", src: "./panel-actions/invert-action.js" },
     { key: "wiggle", src: "./panel-actions/wiggle-action.js" },
     { key: "confetti", src: "./panel-actions/confetti-action.js" },
@@ -32,6 +36,7 @@
     rainbowSpeed: RAINBOW_DEFAULT_SPEED_MS,
     rainbowColorCount: 3,
     rainbowSpeedUnlocked: false,
+    randomMode: CRAZY_TORNADO_CONFIG.enablePointClickByDefault ? "point" : "chaos",
   };
   const actionHandlers = {};
   const assets = {
@@ -264,6 +269,13 @@
     const handlers = window.CrazyPanelButtonHandlers;
     if (handlers && typeof handlers.initializeTornadoControls === "function") {
       handlers.initializeTornadoControls(shared);
+    }
+
+    if (CRAZY_TORNADO_CONFIG.enablePointClickByDefault) {
+      const pointButton = document.querySelector(`#${shared.constants.PANEL_ID} button[data-action="point"]`);
+      if (pointButton && !pointButton.classList.contains("is-on")) {
+        pointButton.click();
+      }
     }
   }
 
